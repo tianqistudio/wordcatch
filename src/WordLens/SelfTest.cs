@@ -20,7 +20,7 @@ public static class SelfTest
     public static async Task RunAsync()
     {
         var checks = new Dictionary<string, object>();
-        string output = Environment.GetEnvironmentVariable("WORDLENS_QA_OUTPUT") ?? Path.Combine(App.Root,"artifacts","qa","v0.4.0");
+        string output = Environment.GetEnvironmentVariable("WORDLENS_QA_OUTPUT") ?? Path.Combine(App.Root,"artifacts","qa","v0.5.0");
         Directory.CreateDirectory(output);
         var monitors = new List<object>();
         foreach (var screen in System.Windows.Forms.Screen.AllScreens)
@@ -88,27 +88,70 @@ public static class SelfTest
             await card.LookupAsync("Hello",capture.Cursor,"选中文字");
             await Task.Delay(150);
             checks["popup_does_not_activate"] = foreground == Native.GetForegroundWindow();
-            checks["selection_origin_retained"] = card.Origin.Text == "选中文字";
-            checks["word_layout"] = card.Kind.Text == "单词释义" && card.Definition.Text.Length > 0;
+            checks["selection_origin_retained"] = card.Primary.Origin.Text == "选中文字";
+            checks["word_layout"] = card.Primary.Kind.Text == "单词释义" && card.Primary.Definition.Text.Length > 0;
             Render(card,Path.Combine(output,"result-card.png"));
+            checks["compound_boundaries"] = string.Join("|", CompoundWords.Split("response-conventions")) == "response|conventions"
+                && string.Join("|", CompoundWords.Split("responseConventions")) == "response|Conventions"
+                && string.Join("|", CompoundWords.Split("HTTPServer")) == "HTTP|Server"
+                && string.Join("|", CompoundWords.Split("response_conventions")) == "response|conventions";
+            checks["no_arbitrary_splitting"] = CompoundWords.Split("unknownword").Length == 0
+                && CompoundWords.Split("don't").Length == 0 && CompoundWords.Split("This is a sentence.").Length == 0;
+            await card.LookupAsync("response-conventions", capture.Cursor, "屏幕识别");
+            checks["compound_explained_separately"] = card.Primary.Kind.Text == "拆分释义"
+                && card.Primary.Definition.Text.Contains("response") && card.Primary.Definition.Text.Contains("conventions")
+                && card.Primary.State.Text.Contains("2 个单词");
+            Render(card, Path.Combine(output, "compound-split.png"));
+            await card.LookupAsync("response-zzzznotaword", capture.Cursor);
+            checks["partial_split_honest"] = card.Primary.State.Text.Contains("1/2") && card.Primary.Definition.Text.Contains("未收录");
+            await card.LookupAsync("mother-in-law", capture.Cursor);
+            checks["known_compound_not_split"] = card.Primary.Kind.Text != "拆分释义" && card.Primary.Definition.Text.Length > 0;
+            checks["clipboard_trimmed"] = ClipboardText.Read(() => "  world\r\n").Text == "world";
+            checks["clipboard_empty"] = ClipboardText.Read(() => " \r\n").Text == null;
+            checks["clipboard_limit"] = ClipboardText.Read(() => new string('x', 2000)).Text?.Length == 2000
+                && ClipboardText.Read(() => new string('x', 2001)).Error != null;
+            checks["clipboard_busy"] = ClipboardText.Read(() => throw new System.Runtime.InteropServices.COMException()).Error != null;
+            await card.LookupSourcesAsync("Hello", null, new ClipboardRead("world"), capture.Cursor);
+            checks["both_sources_visible"] = card.Primary.Origin.Text == "选中文字" && card.ClipboardResult.Origin.Text == "剪贴板"
+                && card.Primary.Definition.Text.Length > 0 && card.ClipboardResult.Definition.Text.Length > 0
+                && card.ClipboardBorder.IsVisible;
+            checks["combined_does_not_activate"] = foreground == Native.GetForegroundWindow();
+            Render(card, Path.Combine(output, "clipboard-dual.png"));
+            card.Width = card.MinWidth; card.Height = card.MinHeight;
+            Render(card, Path.Combine(output, "clipboard-dual-minimum.png"));
+            checks["narrow_cards_stacked"] = Grid.GetRow(card.ClipboardBorder) == 1 && card.ClipboardResult.Word.ActualWidth > 150;
+            card.ClipboardResult.Word.Text = "mouse";
+            checks["independent_edit"] = card.ClipboardResult.Definition.Text == "" && card.Primary.Definition.Text.Length > 0;
+            await card.LookupSourcesAsync("Hello", null, new ClipboardRead("Hello"), capture.Cursor);
+            checks["same_word_both_origins"] = card.Primary.Word.Text == "Hello" && card.ClipboardResult.Word.Text == "Hello";
+            await card.LookupSourcesAsync(null, capture, new ClipboardRead("world"), capture.Cursor);
+            checks["ocr_and_clipboard"] = card.Primary.Word.Text.Equals("Hello", StringComparison.OrdinalIgnoreCase)
+                && card.ClipboardResult.Word.Text == "world" && card.ClipboardResult.Definition.Text.Length > 0;
+            await card.LookupSourcesAsync(null, null, new ClipboardRead("world"), capture.Cursor, "屏幕取词失败");
+            checks["clipboard_survives_capture_failure"] = card.Primary.State.Text == "屏幕取词失败" && card.ClipboardResult.Definition.Text.Length > 0;
+            await card.LookupSourcesAsync("Hello", null, new ClipboardRead(Error: "剪贴板正忙"), capture.Cursor);
+            checks["screen_survives_clipboard_failure"] = card.Primary.Definition.Text.Length > 0 && card.ClipboardResult.State.Text == "剪贴板正忙";
+            Render(card, Path.Combine(output, "clipboard-busy.png"));
+            await card.LookupSourcesAsync("Hello", null, new ClipboardRead(), capture.Cursor);
+            checks["empty_clipboard_hidden"] = !card.ClipboardBorder.IsVisible;
             card.Width = card.MinWidth; card.Height = card.MinHeight;
             await card.LookupAsync("This is a sentence about a curious little mouse.", capture.Cursor, "选中文字");
-            checks["sentence_needs_cloud"] = card.State.Text.Contains("句子翻译需设置") && card.Busy.Visibility == Visibility.Collapsed;
+            checks["sentence_needs_cloud"] = card.Primary.State.Text.Contains("句子翻译需设置") && card.Primary.Busy.Visibility == Visibility.Collapsed;
             Render(card,Path.Combine(output,"sentence-disabled-minimum.png"));
-            card.Word.Text = "Edited text";
-            checks["edit_clears_old_result"] = card.Definition.Text == "" && card.Source.Text == "待查询";
+            card.Primary.Word.Text = "Edited text";
+            checks["edit_clears_old_result"] = card.Primary.Definition.Text == "" && card.Primary.Source.Text == "待查询";
             await card.LookupAsync(new string('x',2001),capture.Cursor,"选中文字");
-            checks["long_selection_rejected"] = card.State.Text.Contains("2,000") && card.Busy.Visibility == Visibility.Collapsed;
+            checks["long_selection_rejected"] = card.Primary.State.Text.Contains("2,000") && card.Primary.Busy.Visibility == Visibility.Collapsed;
             card.Width=460; card.Height=460;
             card.Dismiss();
             await card.CaptureAsync(capture);
             checks["highlight_does_not_activate"] = foreground == Native.GetForegroundWindow();
-            checks["ocr_origin_retained"] = card.Origin.Text == "屏幕识别";
+            checks["ocr_origin_retained"] = card.Primary.Origin.Text == "屏幕识别";
             var blankPoint = ((TextBlock)sample.Content).PointToScreen(new Point(500,140));
             var blank = ScreenCapture.AroundPoint(new Native.Point((int)blankPoint.X,(int)blankPoint.Y));
             card.Dismiss();
             await card.CaptureAsync(blank);
-            checks["empty_ocr_actionable"] = card.Word.Text == "" && card.State.Text.Contains("移到文字上");
+            checks["empty_ocr_actionable"] = card.Primary.Word.Text == "" && card.Primary.State.Text.Contains("移到文字上");
             Render(card,Path.Combine(output,"empty-ocr.png"));
             card.Dismiss();
             var fakeSettings = new CloudSettings(Path.Combine(output,"synthetic-cloud.json"));
@@ -117,19 +160,29 @@ public static class SelfTest
             var cloudCard = new ResultWindow(worker,new TranslationService(fakeSettings,new AzureTranslator(fakeHttp)));
             var pending = cloudCard.LookupAsync("A curious mouse reads a long sentence.",capture.Cursor,"选中文字");
             await fakeHttp.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
-            checks["cloud_loading_visible"] = cloudCard.Busy.Visibility == Visibility.Visible;
+            checks["cloud_loading_visible"] = cloudCard.Primary.Busy.Visibility == Visibility.Visible;
             Render(cloudCard,Path.Combine(output,"cloud-loading.png"));
             await cloudCard.LookupAsync("Hello",capture.Cursor,"选中文字");
             fakeHttp.Release.TrySetResult(true); await pending;
-            checks["stale_cloud_cannot_overwrite"] = cloudCard.Word.Text == "Hello" && cloudCard.Source.Text.Contains("ECDICT") && cloudCard.Definition.Text != "这是一句模拟译文。";
+            checks["stale_cloud_cannot_overwrite"] = cloudCard.Primary.Word.Text == "Hello" && cloudCard.Primary.Source.Text.Contains("ECDICT") && cloudCard.Primary.Definition.Text != "这是一句模拟译文。";
+            var delayedHttp = new FixtureTranslator();
+            var dualCloud = new ResultWindow(worker, new TranslationService(fakeSettings, new AzureTranslator(delayedHttp)));
+            var delayed = dualCloud.LookupSourcesAsync("Hello", null, new ClipboardRead("A curious mouse reads a long sentence."), capture.Cursor);
+            await delayedHttp.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            checks["independent_cloud_loading"] = dualCloud.Primary.Definition.Text.Length > 0 && dualCloud.ClipboardResult.Busy.Visibility == Visibility.Visible;
+            await dualCloud.LookupSourcesAsync("world", null, new ClipboardRead("Hello"), capture.Cursor);
+            delayedHttp.Release.TrySetResult(true); await delayed;
+            checks["stale_clipboard_cloud_cannot_overwrite"] = dualCloud.ClipboardResult.Word.Text == "Hello"
+                && dualCloud.ClipboardResult.Source.Text.Contains("ECDICT") && dualCloud.Primary.Word.Text == "world";
+            dualCloud.Dismiss();
             await cloudCard.LookupAsync("A curious mouse reads a long sentence.",capture.Cursor,"选中文字");
-            checks["sentence_cloud_layout"] = cloudCard.Kind.Text == "句子译文" && cloudCard.Definition.Text == "这是一句模拟译文。";
+            checks["sentence_cloud_layout"] = cloudCard.Primary.Kind.Text == "句子译文" && cloudCard.Primary.Definition.Text == "这是一句模拟译文。";
             cloudCard.Width=cloudCard.MinWidth; cloudCard.Height=cloudCard.MinHeight;
             Render(cloudCard,Path.Combine(output,"sentence-translated-minimum.png"));
-            checks["minimum_translation_visible"] = cloudCard.Definition.ActualHeight >= 28 && ((FrameworkElement)cloudCard.Definition.Parent).ActualHeight >= 56;
+            checks["minimum_translation_visible"] = cloudCard.Primary.Definition.ActualHeight >= 28 && ((FrameworkElement)cloudCard.Primary.Definition.Parent).ActualHeight >= 56;
             fakeHttp.Fail = true;
             await cloudCard.LookupAsync("This simulated service request will fail.",capture.Cursor);
-            checks["cloud_error_visible"] = cloudCard.State.Text.Contains("暂时不可用") && cloudCard.Busy.Visibility == Visibility.Collapsed;
+            checks["cloud_error_visible"] = cloudCard.Primary.State.Text.Contains("暂时不可用") && cloudCard.Primary.Busy.Visibility == Visibility.Collapsed;
             Render(cloudCard,Path.Combine(output,"cloud-error.png"));
             cloudCard.Dismiss();
             card.Dismiss();
