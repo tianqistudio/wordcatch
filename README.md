@@ -4,7 +4,7 @@ Windows 10/11 x64 取词助手。按 **Ctrl + Alt + D**，优先读取当前软�
 
 ## 安装使用
 
-当前版本 **v0.4.0**：[安装程序](https://github.com/tianqistudio/wordcatch/releases/latest)（约 166 MiB）。内置运行环境、OCR 模型和词典，无需另装 Python 或 .NET。安装包未签名，尚未在本机实际安装。
+当前版本 **v0.4.0**：[安装程序](https://github.com/tianqistudio/wordcatch/releases/latest)（约 166 MiB）。内置运行环境、OCR 模型和词典，无需另装 Python 或 .NET。
 
 1. 安装时可独立选择桌面和开始菜单快捷方式，默认均勾选。
 2. 启动后等待就绪。选中文字或把鼠标放在单词上，按快捷键查询。
@@ -44,15 +44,13 @@ C# / WPF、Windows UI Automation、RapidOCR + ONNX Runtime CPU、ECDICT SQLite�
 
 新开发环境需要 Python 3.12 和 .NET 10 SDK，运行 Setup-WordLens.ps1 准备环境。Python 测试命令为 .venv\Scripts\python.exe -m unittest discover -s tests -v。
 
-## 验证与边界
+## 使用说明
 
-[验收范围](docs/verification.md)包含选区、真实样本截图 OCR、词典、浮窗、Azure 模拟接口及安装维护脚本的隔离测试。最终容器通过逐文件校验；未在本机实际安装，也未用有效 Azure 密钥完成真实云端测试。
-
-选区读取依赖目标软件的 UI Automation 支持；不支持或超时时回退 OCR。复杂背景、小字体、动态画面及受保护窗口可能失败。多屏混合缩放、B 站和网盘仍待专项验证。没有自动悬停、发音、自动安装更新或开机启动。
+选区读取依赖目标软件的 UI Automation 支持；不支持或超时时回退 OCR。复杂背景、小字体、动态画面及受保护窗口可能失败。没有自动悬停、发音、自动安装更新或开机启动。
 
 ## 品牌与兼容
 
-可编辑图标在 [wordcatch.svg](src/WordLens/Assets/wordcatch.svg)，PNG 和多尺寸 ICO 同目录。主图标与托盘图标由本项目几何绘制，未使用影视角色素材。本地项目目录为 DEV_WordCatch。为兼容旧版本，内部命名空间、程序文件名及安装／配置标识仍保留 WordLens。
+可编辑图标在 [wordcatch.svg](src/WordLens/Assets/wordcatch.svg)，PNG 和多尺寸 ICO 同目录。为兼容旧版本，内部命名空间、程序文件名及安装／配置标识仍保留 WordLens。
 
 ## 源码与版权
 
