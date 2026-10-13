@@ -51,8 +51,13 @@ public static class SelectedText
         bool belongs = false;
         for (int i=0; i<16 && current!=null; i++, current=TreeWalker.ControlViewWalker.GetParent(current))
             if (current.Equals(root)) { belongs=true; break; }
-        if (belongs && focus!=null) candidates.Add(focus);
-        candidates.Add(root);
+        if (belongs && focus!=null)
+        {
+            var text = ReadElementSelection(focus);
+            if (text != null) return text;
+        }
+        var rootText = ReadElementSelection(root);
+        if (rootText != null) return rootText;
         // Some apps expose selection on the document, not on the focused child.
         // Restrict the search to the foreground window instead of assuming all
         // UIA providers share its process ID (multi-process browsers do not).
@@ -60,6 +65,15 @@ public static class SelectedText
         for (int i=0; i<Math.Min(descendants.Count,32); i++) candidates.Add(descendants[i]);
         LastStatus = "no-text-pattern";
         foreach (var element in candidates)
+        {
+            var text = ReadElementSelection(element);
+            if (text != null) return text;
+        }
+        return null;
+    }
+    private static string? ReadElementSelection(AutomationElement element)
+    {
+        try
         {
             if (element.TryGetCurrentPattern(TextPattern.Pattern, out var value))
             {
@@ -74,6 +88,8 @@ public static class SelectedText
                 }
             }
         }
+        catch (ElementNotAvailableException) { }
+        catch (InvalidOperationException) { }
         return null;
     }
     [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint processId);

@@ -3,7 +3,7 @@
     <OutputType>WinExe</OutputType><TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF><UseWindowsForms>true</UseWindowsForms>
     <Nullable>enable</Nullable><ImplicitUsings>disable</ImplicitUsings>
-    <ApplicationManifest>app.manifest</ApplicationManifest><Version>0.4.0</Version><Product>单词捕手 · WordCatch</Product><Title>单词捕手</Title><ApplicationIcon>Assets/wordcatch.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest><Version>0.5.0</Version><Product>单词捕手 · WordCatch</Product><Title>单词捕手</Title><ApplicationIcon>Assets/wordcatch.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup><PackageReference Include="TianqiStudio.DesktopShortcuts.Wpf" Version="0.1.0"/></ItemGroup>
   <ItemGroup><Resource Include="Assets/*.ico"/><Resource Include="Assets/*.png"/></ItemGroup>

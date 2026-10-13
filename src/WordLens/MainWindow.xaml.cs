@@ -26,7 +26,7 @@ public partial class MainWindow : Window
         result = new ResultWindow(worker, translation);
         shortcuts = new ShortcutManager(new LocalShortcutStore(ShortcutStorePaths.ForApplication("TianqiStudio", "WordLens")), new WindowsHotkeyRegistrar());
         shortcuts.ReplaceActions(new[] { new ShortcutAction("capture", "屏幕取词", "查词", ShortcutScopePolicy.RequiredGlobal,
-            new ShortcutBinding(new ShortcutChord(0x44, ShortcutModifiers.Control | ShortcutModifiers.Alt), true), "优先查询选区，其次识别鼠标下的单词") });
+            new ShortcutBinding(new ShortcutChord(0x44, ShortcutModifiers.Control | ShortcutModifiers.Alt), true), "优先查询选区，其次识别鼠标下的单词，同时查询剪贴板") });
         shortcuts.ActionRequested += action => { _ = CaptureAsync(); };
         shortcuts.ChordCaptured += chord => { if (recording && chord != null) SaveChord(chord); };
         var menu = new Forms.ContextMenuStrip();
@@ -55,19 +55,23 @@ public partial class MainWindow : Window
         try
         {
             result.Dismiss();
-            var selected = await SelectedText.ReadAsync();
-            if (!string.IsNullOrWhiteSpace(selected))
+            Native.GetCursorPos(out var position);
+            var clipboard = ClipboardText.Read();
+            string? selected = null;
+            Capture? capture = null;
+            string? screenError = null;
+            try
             {
-                Native.GetCursorPos(out var position);
-                query = result.LookupAsync(selected, position, "选中文字");
+                selected = await SelectedText.ReadAsync();
+                if (string.IsNullOrWhiteSpace(selected))
+                {
+                    // Capture before showing either card, so the cards cannot enter OCR.
+                    await Task.Delay(70);
+                    capture = ScreenCapture.AroundPoint(position);
+                }
             }
-            else
-            {
-                // Give DWM time to remove the previous card before capture.
-                await Task.Delay(70);
-                var capture = ScreenCapture.AroundCursor();
-                query = result.CaptureAsync(capture);
-            }
+            catch (Exception ex) { screenError = "屏幕取词失败：" + ex.Message; }
+            query = result.LookupSourcesAsync(selected, capture, clipboard, position, screenError);
         }
         catch (Exception ex) { Status.Text = "取词失败：" + ex.Message; OpenWindow(); }
         finally { capturing = false; }

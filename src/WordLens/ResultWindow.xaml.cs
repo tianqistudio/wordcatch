@@ -1,153 +1,101 @@
 using System;
-using System.ComponentModel;
-using System.Linq;
-using System.Text.Json;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
-using System.Threading;
-using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Threading;
 
 namespace WordLens;
+
 public partial class ResultWindow : Window
 {
-    private readonly WorkerClient worker;
-    private readonly TranslationService translation;
-    private CancellationTokenSource requestLifetime = new();
-    private int generation;
-    private bool assigning;
-    private string origin = "输入文字";
-    private bool IsSingleWord => Regex.IsMatch(Word.Text.Trim(), @"^[A-Za-z]+(?:[’'-][A-Za-z]+)*[.!?,;:]?$");
-    private void SetBusy(bool busy) => Busy.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
-    private void UpdateKind() { Kind.Text = IsSingleWord ? "单词释义" : "短语 / 句子"; Word.FontSize = IsSingleWord ? 23 : 16; }
-    private Window? highlight;
-    private readonly DispatcherTimer highlightTimer = new() { Interval = TimeSpan.FromSeconds(2) };
+    internal ResultCard Primary { get; }
+    internal ResultCard ClipboardResult { get; }
+    private bool combined;
+
     public ResultWindow(WorkerClient worker, TranslationService? translation = null)
     {
-        this.worker = worker; this.translation = translation ?? new TranslationService(); InitializeComponent();
+        InitializeComponent();
+        PrimaryHost.Content = Primary = new ResultCard(worker, translation);
+        ClipboardHost.Content = ClipboardResult = new ResultCard(worker, translation);
         Closing += (_, e) => { e.Cancel = true; Dismiss(); };
         PreviewKeyDown += (_, e) => { if (e.Key == Key.Escape) { Dismiss(); e.Handled = true; } };
-        highlightTimer.Tick += (_, _) => ClearHighlight();
+        SizeChanged += (_, _) => ArrangeCards();
+        CardScroll.SizeChanged += (_, _) => ArrangeCards();
     }
-    private void SetWord(string text) { assigning = true; Word.Text = text; assigning = false; UpdateKind(); }
-    private void WordChanged(object sender, TextChangedEventArgs e)
+
+    private void Present(Native.Point point, bool hasClipboard)
     {
-        if (!assigning && State != null) { generation++; CancelRequest(); State.Text = "已修改，按 Enter 重新查询。"; Phonetic.Text = ""; Definition.Text = ""; Source.Text = "待查询"; origin = "编辑原文"; Origin.Text = origin; UpdateKind(); }
-    }
-    private int Begin(string text, Native.Point point, string status, string origin)
-    {
-        int current = ++generation;
-        CancelRequest();
-        this.origin = origin; Origin.Text = origin;
-        ClearHighlight(); SetWord(text); Phonetic.Text = ""; Definition.Text = ""; State.Text = status; Source.Text = "本地词典 · ECDICT"; SetBusy(true);
-        Show(); ScreenCapture.Place(this, point);
-        return current;
-    }
-    public async Task CaptureAsync(Capture capture)
-    {
-        int current = Begin("", capture.Cursor, "正在识别鼠标附近的文字…", "屏幕识别");
-        try
+        Primary.Dismiss();
+        ClipboardResult.Dismiss();
+        bool wasCombined = combined;
+        combined = hasClipboard;
+        ClipboardBorder.Visibility = combined ? Visibility.Visible : Visibility.Collapsed;
+        var info = new Native.MonitorInfo { Size = Marshal.SizeOf<Native.MonitorInfo>() };
+        var monitor = Native.MonitorFromPoint(point, 2);
+        Native.GetMonitorInfo(monitor, ref info);
+        Native.GetDpiForMonitor(monitor, 0, out uint dpi, out _);
+        double scale = (dpi == 0 ? 96 : dpi) / 96.0;
+        double availableWidth = (info.Work.Right - info.Work.Left) / scale;
+        double availableHeight = (info.Work.Bottom - info.Work.Top) / scale;
+        if (combined)
         {
-            var reply = await worker.RequestAsync(new { action = "ocr", image = capture.Image, x = capture.X, y = capture.Y });
-            if (current != generation) return;
-            string text = reply.GetProperty("text").GetString() ?? "";
-            SetWord(text);
-            if (text.Length == 0) { Kind.Text = "未捕获文字"; Source.Text = "屏幕识别"; State.Text = "将鼠标移到文字上再试，也可以直接输入查询。"; return; }
-            await DisplayAsync(reply, current);
-            if (current != generation) return;
-            if (reply.TryGetProperty("selected", out var selected) && selected.ValueKind == JsonValueKind.Object)
-                Highlight(selected.GetProperty("box"), capture);
+            Width = Math.Max(MinWidth, Math.Min(920, availableWidth));
+            Height = Math.Max(MinHeight, Math.Min(Width < 760 ? 880 : 460, availableHeight));
         }
-        catch (Exception ex) { if (current == generation) State.Text = "识别失败，可修改原文重查：" + ex.Message; }
-        finally { if (current == generation) SetBusy(false); }
+        if (wasCombined && !combined) { Width = 460; Height = 460; }
+        ArrangeCards();
+        Show();
+        ScreenCapture.Place(this, point);
     }
-    public async Task LookupAsync(string text, Native.Point point, string origin = "输入文字")
+
+    private void ArrangeCards()
     {
-        int current = Begin(text, point, "正在查询本地词典…", origin);
-        if (text.Length > 2000) { State.Text = "选区超过 2,000 字符，请缩小选区后重试。"; SetBusy(false); return; }
-        try
+        bool stacked = combined && Width < 760;
+        ClipboardColumn.Width = combined && !stacked ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+        ClipboardRow.Height = stacked ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+        Grid.SetColumn(ClipboardBorder, stacked ? 0 : 1);
+        Grid.SetRow(ClipboardBorder, stacked ? 1 : 0);
+        ClipboardBorder.BorderThickness = stacked ? new Thickness(0, 1, 0, 0) : new Thickness(1, 0, 0, 0);
+        PrimaryHost.MinHeight = ClipboardHost.MinHeight = 400;
+        Cards.MinHeight = stacked ? 800 : 400;
+        Cards.Height = Math.Max(Cards.MinHeight, CardScroll.ActualHeight);
+    }
+
+    public Task LookupAsync(string text, Native.Point point, string origin = "输入文字")
+    {
+        Present(point, false);
+        return Primary.LookupAsync(text, point, origin);
+    }
+
+    public Task CaptureAsync(Capture capture)
+    {
+        Present(capture.Cursor, false);
+        return Primary.CaptureAsync(capture);
+    }
+
+    public async Task LookupSourcesAsync(string? selected, Capture? capture, ClipboardRead clipboard,
+        Native.Point point, string? screenError = null)
+    {
+        Present(point, clipboard.Text != null || clipboard.Error != null);
+        Task screen;
+        if (!string.IsNullOrWhiteSpace(selected)) screen = Primary.LookupAsync(selected, point, "选中文字");
+        else if (capture != null) screen = Primary.CaptureAsync(capture);
+        else
         {
-            var reply = await worker.RequestAsync(new { action = "lookup", text });
-            if (current == generation) await DisplayAsync(reply, current);
+            Primary.ShowError(screenError ?? "未读取到屏幕文字，请重新取词。", "屏幕识别");
+            screen = Task.CompletedTask;
         }
-        catch (Exception ex) { if (current == generation) State.Text = "查词失败，可重试：" + ex.Message; }
-        finally { if (current == generation) SetBusy(false); }
+        Task copied = Task.CompletedTask;
+        if (clipboard.Error != null) ClipboardResult.ShowError(clipboard.Error, "剪贴板");
+        else if (clipboard.Text != null) copied = ClipboardResult.LookupAsync(clipboard.Text, point, "剪贴板");
+        await Task.WhenAll(screen, copied);
     }
-    private async Task DisplayAsync(JsonElement reply, int current)
+
+    public void Dismiss()
     {
-        var entry = reply.GetProperty("entry");
-        if (entry.ValueKind == JsonValueKind.Null)
-        {
-            Source.Text = "本地词典 · 未收录";
-            State.Text = IsSingleWord ? "本地未收录，可修改原文重查，或在设置中启用云端翻译。" : "句子翻译需设置云端服务，请在主窗口打开「设置与关于」。";
-            if (translation.Enabled) await TranslateCloudAsync(current);
-            return;
-        }
-        string phonetic = entry.GetProperty("phonetic").GetString() ?? "";
-        Phonetic.Text = phonetic.Length > 0 ? $"/{phonetic}/" : "";
-        string matched = entry.GetProperty("matched").GetString() ?? "";
-        State.Text = string.Equals(matched, Word.Text.Trim(), StringComparison.OrdinalIgnoreCase) ? "本地词典释义" : $"匹配词条：{matched}";
-        Kind.Text = IsSingleWord ? "单词释义" : "短语释义";
-        string chinese = entry.GetProperty("translation").GetString() ?? "";
-        string english = entry.GetProperty("definition").GetString() ?? "";
-        Definition.Text = chinese + (chinese.Length > 0 && english.Length > 0 ? "\n\n" : "") + english;
-        if (chinese.Length == 0 && translation.Enabled) await TranslateCloudAsync(current);
-    }
-    private async Task TranslateCloudAsync(int current)
-    {
-        string text = Word.Text.Trim();
-        var cancellation = requestLifetime.Token;
-        if (!translation.Enabled) { State.Text = "请在主窗口的「设置与关于」启用 Azure 翻译。"; return; }
-        SetBusy(true);
-        State.Text = "正在翻译，可继续查询其他文字…";
-        try
-        {
-            string translated = await translation.TranslateAsync(text, cancellation);
-            if (current != generation || cancellation.IsCancellationRequested) return;
-            Definition.Text = translated; Phonetic.Text = ""; Source.Text = "云端翻译 · Microsoft Azure"; Kind.Text = IsSingleWord ? "单词译文" : "句子译文"; State.Text = "已译为简体中文";
-        }
-        catch (OperationCanceledException) { }
-        catch (Exception ex) { if (current == generation) State.Text = ex.Message; }
-        finally { if (current == generation) SetBusy(false); }
-    }
-    private async void CloudLookup(object sender, RoutedEventArgs e)
-    {
-        if (string.IsNullOrWhiteSpace(Word.Text)) return;
-        CancelRequest(); int current = ++generation;
-        await TranslateCloudAsync(current);
-    }
-    private void CancelRequest() { if (Busy != null) SetBusy(false); requestLifetime.Cancel(); requestLifetime.Dispose(); requestLifetime = new CancellationTokenSource(); }
-    private void Highlight(JsonElement box, Capture capture)
-    {
-        var points = box.EnumerateArray().Select(p => (X: p[0].GetDouble(), Y: p[1].GetDouble())).ToArray();
-        int x = capture.Left+(int)Math.Floor(points.Min(p=>p.X))-2, y = capture.Top+(int)Math.Floor(points.Min(p=>p.Y))-2;
-        int w = (int)Math.Ceiling(points.Max(p=>p.X)-points.Min(p=>p.X))+4, h = (int)Math.Ceiling(points.Max(p=>p.Y)-points.Min(p=>p.Y))+4;
-        highlight = new Window { WindowStyle = WindowStyle.None, AllowsTransparency = true, Background = Brushes.Transparent,
-            ShowActivated = false, ShowInTaskbar = false, Topmost = true, IsHitTestVisible = false, Width=w, Height=h,
-            Content = new Border { BorderBrush = new SolidColorBrush(Color.FromRgb(233,185,73)), BorderThickness = new Thickness(2), CornerRadius=new CornerRadius(2) } };
-        highlight.Show();
-        var handle = new System.Windows.Interop.WindowInteropHelper(highlight).Handle;
-        // WS_EX_TRANSPARENT | WS_EX_NOACTIVATE: marker must never intercept the target application's mouse input.
-        SetWindowLong(handle, -20, GetWindowLong(handle, -20) | 0x20 | 0x08000000);
-        Native.SetWindowPos(handle, new IntPtr(-1), x,y,w,h,0x0010);
-        highlightTimer.Start();
-    }
-    [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint="GetWindowLongW")] private static extern int GetWindowLong(IntPtr h,int index);
-    [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint="SetWindowLongW")] private static extern int SetWindowLong(IntPtr h,int index,int value);
-    private void ClearHighlight() { highlightTimer.Stop(); highlight?.Close(); highlight = null; }
-    public void Dismiss() { generation++; CancelRequest(); ClearHighlight(); Hide(); }
-    private async void QueryAgain(object sender, RoutedEventArgs e)
-    {
-        if (string.IsNullOrWhiteSpace(Word.Text)) return;
-        Native.GetCursorPos(out var point); await LookupAsync(Word.Text.Trim(), point, "编辑原文");
-    }
-    private void WordKeyDown(object sender, KeyEventArgs e) { if (e.Key == Key.Enter) { e.Handled=true; QueryAgain(sender,e); } }
-    private void CopyWord(object sender, RoutedEventArgs e)
-    {
-        try { if (Word.Text.Length > 0) { Clipboard.SetText(Word.Text); State.Text = "已复制原文。"; } }
-        catch (System.Runtime.InteropServices.COMException) { State.Text = "剪贴板正忙，请重试。"; }
+        Primary.Dismiss();
+        ClipboardResult.Dismiss();
+        Hide();
     }
 }
