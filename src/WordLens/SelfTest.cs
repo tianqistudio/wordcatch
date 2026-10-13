@@ -128,6 +128,8 @@ public static class SelfTest
             checks["combined_does_not_activate"] = foreground == Native.GetForegroundWindow();
             Render(card, Path.Combine(output, "clipboard-dual.png"));
             card.Width = card.MinWidth; card.Height = card.MinHeight;
+            await card.Dispatcher.InvokeAsync(() => card.UpdateLayout(), System.Windows.Threading.DispatcherPriority.Render);
+            await Task.Delay(100);
             Render(card, Path.Combine(output, "clipboard-dual-minimum.png"));
             checks["narrow_cards_stacked"] = Grid.GetRow(card.ClipboardBorder) == 1 && card.ClipboardResult.Word.ActualWidth > 150;
             card.ClipboardResult.Word.Text = "mouse";
@@ -154,8 +156,9 @@ public static class SelfTest
             checks["long_selection_rejected"] = card.Primary.State.Text.Contains("2,000") && card.Primary.Busy.Visibility == Visibility.Collapsed;
             card.Width=460; card.Height=460;
             card.Dismiss();
+            var beforeHighlight = Native.GetForegroundWindow();
             await card.CaptureAsync(capture);
-            checks["highlight_does_not_activate"] = foreground == Native.GetForegroundWindow();
+            checks["highlight_does_not_activate"] = beforeHighlight == Native.GetForegroundWindow();
             checks["ocr_origin_retained"] = card.Primary.Origin.Text == "屏幕识别";
             var blankPoint = ((TextBlock)sample.Content).PointToScreen(new Point(500,140));
             var blank = ScreenCapture.AroundPoint(new Native.Point((int)blankPoint.X,(int)blankPoint.Y));
@@ -221,11 +224,36 @@ public static class SelfTest
             Render(main,Path.Combine(output,"main-minimum.png"));
             checks["main_brand"] = main.Title == "单词捕手 · WordCatch";
             checks["minimum_query_visible"] = main.Query.ActualWidth > 150 && main.LookupButton.ActualWidth > 30;
-            var settings = new CloudSettingsWindow(disabled) { Owner=main };
+            var settings = new CloudSettingsWindow(disabled, null, new LocalLanguagePreference(Path.Combine(output, "ui-language"))) { Owner=main };
             settings.Show(); await Task.Delay(100); Render(settings,Path.Combine(output,"cloud-settings.png"));
             checks["startup_option_visible"] = settings.StartAtLogin.IsVisible;
             checks["update_settings_visible"] = settings.CheckUpdate.IsVisible && settings.UpdateSourceChoice.Items.Count==3;
             checks["update_auto_default"] = settings.AutoUpdate.IsChecked==true;
+            var languagePreference = new LocalLanguagePreference(Path.Combine(output, "language-preference"));
+            checks["language_default_chinese"] = languagePreference.Load() == UiLanguage.SimplifiedChinese;
+            languagePreference.Save(UiLanguage.English);
+            checks["language_english_persisted"] = languagePreference.Load() == UiLanguage.English;
+            main.Query.Text = "保存 English 原文";
+            var originalDefinition = cloudCard.Primary.Definition.Text;
+            for (int cycle = 0; cycle < 2; cycle++)
+            {
+                settings.LanguageChoice.SelectedIndex = 1;
+                checks["language_preserves_result_controls_" + cycle] = ReferenceEquals(card.PrimaryHost.Content, card.Primary) && ReferenceEquals(card.ClipboardHost.Content, card.ClipboardResult);
+                checks["language_english_ui_" + cycle] = main.Title == "WordCatch" && (string)main.LookupButton.Content == "Look up"
+                    && (string)settings.CheckUpdate.Content == "Check for updates";
+                checks["language_preserves_input_" + cycle] = main.Query.Text == "保存 English 原文"
+                    && cloudCard.Primary.Definition.Text == originalDefinition;
+                main.Status.Text = "已分别处理 3 项；未收录的组合词拆分解释。";
+                checks["language_dynamic_status_" + cycle] = main.Status.Text == "Processed 3 items separately; missing compound entries were split into words.";
+                Render(main,Path.Combine(output,"main-english-"+cycle+".png"));
+                Render(settings,Path.Combine(output,"settings-english-"+cycle+".png"));
+                settings.LanguageChoice.SelectedIndex = 0;
+                checks["language_chinese_restored_" + cycle] = main.Title == "单词捕手 · WordCatch"
+                    && main.Status.Text == "已分别处理 3 项；未收录的组合词拆分解释。";
+            }
+            languagePreference.Save(UiLanguage.SimplifiedChinese);
+            checks["language_chinese_persisted"] = languagePreference.Load() == UiLanguage.SimplifiedChinese;
+
             settings.Close();
             checks["passed"] = !checks.ContainsValue(false);
             File.WriteAllText(Path.Combine(output,"desktop-self-test.json"),JsonSerializer.Serialize(checks,new JsonSerializerOptions {WriteIndented=true}));

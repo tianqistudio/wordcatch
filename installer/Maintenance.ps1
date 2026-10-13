@@ -1,10 +1,14 @@
 ﻿param([ValidateSet('Install','Uninstall','Library')][string]$Mode='Library', [string]$Payload,
-      [ValidateSet(0,1)][int]$Desktop=1, [ValidateSet(0,1)][int]$StartMenu=1)
+      [ValidateSet(0,1)][int]$Desktop=1, [ValidateSet(0,1)][int]$StartMenu=1, [ValidateSet(1033,2052)][int]$Language=2052)
+function Get-InstallerText([string]$Chinese,[string]$English) {
+    if ($Language -eq 1033) { return $English }
+    return $Chinese
+}
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
 
 function Convert-AppVersion([string]$Text) {
-    if ($Text -notmatch '^\d+\.\d+\.\d+(\.\d+)?$') { throw '版本格式不正确。' }
+    if ($Text -notmatch '^\d+\.\d+\.\d+(\.\d+)?$') { throw (Get-InstallerText '版本格式不正确。' 'Invalid version format.') }
     $parts=$Text.Split('.')
     if ($parts.Count -eq 3) { $Text += '.0' }
     return [Version]::Parse($Text)
@@ -14,17 +18,17 @@ function Assert-NoReparse([string]$Path) {
     $itemPath=[IO.Path]::GetFullPath($Path)
     while ($itemPath) {
         if (Test-Path -LiteralPath $itemPath) {
-            if ((Get-Item -LiteralPath $itemPath -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "路径含重解析点：$itemPath" }
+            if ((Get-Item -LiteralPath $itemPath -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw (Get-InstallerText "路径含重解析点：$itemPath" "Reparse point in path: $itemPath") }
         }
         $parent=[IO.Path]::GetDirectoryName($itemPath)
         if ($parent -eq $itemPath) { break }; $itemPath=$parent
     }
 }
 function Resolve-OwnedPath([string]$Root,[string]$Relative) {
-    if ([IO.Path]::IsPathRooted($Relative) -or $Relative.Contains(':') -or @($Relative -split '[\\/]' | Where-Object { $_ -eq '..' -or $_ -eq '' }).Count -gt 0) { throw '清单路径不合法。' }
+    if ([IO.Path]::IsPathRooted($Relative) -or $Relative.Contains(':') -or @($Relative -split '[\\/]' | Where-Object { $_ -eq '..' -or $_ -eq '' }).Count -gt 0) { throw (Get-InstallerText '清单路径不合法。' 'Invalid manifest path.') }
     $base=[IO.Path]::GetFullPath($Root).TrimEnd('\')+'\'
     $result=[IO.Path]::GetFullPath((Join-Path $Root $Relative))
-    if (-not $result.StartsWith($base,[StringComparison]::OrdinalIgnoreCase)) { throw '清单路径越界。' }
+    if (-not $result.StartsWith($base,[StringComparison]::OrdinalIgnoreCase)) { throw (Get-InstallerText '清单路径越界。' 'Manifest path escapes the install folder.') }
     Assert-NoReparse $result
     return $result
 }
@@ -32,8 +36,8 @@ function Assert-AppStopped {
     $mutex=$null
     try { $mutex=[Threading.Mutex]::OpenExisting('Local\TianqiStudio.WordLens') }
     catch [Threading.WaitHandleCannotBeOpenedException] { return }
-    catch [UnauthorizedAccessException] { throw '单词捕手可能正在其他权限级别运行，请先退出。' }
-    if ($mutex) { $mutex.Dispose(); throw '请先从通知区域退出单词捕手，再继续。' }
+    catch [UnauthorizedAccessException] { throw (Get-InstallerText '单词捕手可能正在其他权限级别运行，请先退出。' 'WordCatch may be running at another privilege level. Exit it first.') }
+    if ($mutex) { $mutex.Dispose(); throw (Get-InstallerText '请先从通知区域退出单词捕手，再继续。' 'Exit WordCatch from the notification area before continuing.') }
 }
 function Get-LinkPlan([string]$Root,[int]$Desktop,[int]$StartMenu) {
     @(
@@ -48,7 +52,7 @@ function Assert-LinkOwned([string]$Path,[string]$Root) {
     if (Test-Path -LiteralPath $Path) {
         $shell=New-Object -ComObject WScript.Shell
         $target=$shell.CreateShortcut($Path).TargetPath
-        if (-not $target.StartsWith($Root+'\',[StringComparison]::OrdinalIgnoreCase)) { throw "同名快捷方式不属于单词捕手，停止覆盖：$Path" }
+        if (-not $target.StartsWith($Root+'\',[StringComparison]::OrdinalIgnoreCase)) { throw (Get-InstallerText "同名快捷方式不属于单词捕手，停止覆盖：$Path" "This shortcut belongs to another application; overwrite stopped: $Path") }
     }
 }
 function Get-RegSnapshot([string]$Path) {
@@ -87,21 +91,21 @@ function Invoke-WordLensInstall {
     $reg='HKLM:\SOFTWARE\tianqistudio\WordLens'
     $unreg='HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\WordLens'
     $manifest=Get-Content -LiteralPath (Join-Path $Payload 'payload.json') -Raw -Encoding UTF8 | ConvertFrom-Json
-    if ($manifest.product -ne 'WordLens') { throw '载荷标识不符。' }
+    if ($manifest.product -ne 'WordLens') { throw (Get-InstallerText '载荷标识不符。' 'Payload identity mismatch.') }
     $version=Convert-AppVersion $manifest.version
     $oldState=$null; $stateBytes=$null
     if (Test-Path -LiteralPath $statePath) {
         $stateBytes=[IO.File]::ReadAllBytes($statePath)
         $oldState=[Text.Encoding]::UTF8.GetString($stateBytes) | ConvertFrom-Json
-        if ($oldState.product -ne 'WordLens') { throw '已有目录不是词镜安装目录。' }
-        if ($version -lt (Convert-AppVersion $oldState.version)) { throw '不支持降级安装，请使用相同或更新版本。' }
+        if ($oldState.product -ne 'WordLens') { throw (Get-InstallerText '已有目录不是词镜安装目录。' 'The existing folder is not a WordLens installation.') }
+        if ($version -lt (Convert-AppVersion $oldState.version)) { throw (Get-InstallerText '不支持降级安装，请使用相同或更新版本。' 'Downgrades are not supported. Use the same or a newer version.') }
     } elseif (Test-Path -LiteralPath $root) {
         $marker=Join-Path $root 'wordlens-owner.txt'
-        if (@(Get-ChildItem -LiteralPath $root -Force).Count -gt 0 -and (-not (Test-Path -LiteralPath $marker) -or (Get-Content -LiteralPath $marker -Raw) -ne 'WordLens Installer')) { throw '安装目录非空且无单词捕手清单，停止覆盖。' }
+        if (@(Get-ChildItem -LiteralPath $root -Force).Count -gt 0 -and (-not (Test-Path -LiteralPath $marker) -or (Get-Content -LiteralPath $marker -Raw) -ne 'WordLens Installer')) { throw (Get-InstallerText '安装目录非空且无单词捕手清单，停止覆盖。' 'Install folder is not empty and has no WordCatch manifest; overwrite stopped.') }
     }
     foreach ($file in $manifest.files) {
         $source=Resolve-OwnedPath $Payload $file.path
-        if ((Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash -ne $file.sha256) { throw "载荷校验失败：$($file.path)" }
+        if ((Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash -ne $file.sha256) { throw (Get-InstallerText "载荷校验失败：$($file.path)" "Payload verification failed: $($file.path)") }
     }
     $links=@(Get-LinkPlan $root $Desktop $StartMenu)
     $savedLinks=@{}
@@ -121,7 +125,7 @@ function Invoke-WordLensInstall {
         $target=Resolve-OwnedPath $destination $file.path
         New-Item -ItemType Directory -Path ([IO.Path]::GetDirectoryName($target)) -Force | Out-Null
         Copy-Item -LiteralPath (Join-Path $Payload $file.path) -Destination $target
-        if ((Get-FileHash -LiteralPath $target).Hash -ne $file.sha256) { throw "写入校验失败：$($file.path)" }
+        if ((Get-FileHash -LiteralPath $target).Hash -ne $file.sha256) { throw (Get-InstallerText "写入校验失败：$($file.path)" "Written file verification failed: $($file.path)") }
         $installed += [pscustomobject]@{path=$file.path;sha256=$file.sha256}
     }
     $uninstaller=Join-Path $destination 'Uninstall.exe'
@@ -137,7 +141,7 @@ function Invoke-WordLensInstall {
             if ($link.Enabled) {
                 New-Item -ItemType Directory -Path ([IO.Path]::GetDirectoryName($link.Path)) -Force | Out-Null
                 $shortcut=$shell.CreateShortcut($link.Path); $shortcut.TargetPath=Join-Path $destination 'WordLens.exe'; $shortcut.WorkingDirectory=$destination; $shortcut.Save()
-                if ($shell.CreateShortcut($link.Path).TargetPath -ne (Join-Path $destination 'WordLens.exe')) { throw '快捷方式回读不符。' }
+                if ($shell.CreateShortcut($link.Path).TargetPath -ne (Join-Path $destination 'WordLens.exe')) { throw (Get-InstallerText '快捷方式回读不符。' 'Shortcut readback mismatch.') }
             } elseif (Test-Path -LiteralPath $link.Path) { Remove-Item -LiteralPath $link.Path -Force }
         }
         New-Item -Path $reg -Force | Out-Null; New-Item -Path $unreg -Force | Out-Null
@@ -162,22 +166,22 @@ function Invoke-WordLensInstall {
         if ($null -ne $stateBytes) { [IO.File]::WriteAllBytes($statePath,$stateBytes) }
         throw $failure
     }
-    Write-Output ('安装完成：'+$destination)
+    Write-Output ((Get-InstallerText '安装完成：' 'Installation completed: ')+$destination)
 }
 function Invoke-WordLensUninstall {
     $root=Get-InstallRoot
     Assert-NoReparse $root; Assert-AppStopped
     $statePath=Join-Path $root 'install-state.json'
     $state=Get-Content -LiteralPath $statePath -Raw -Encoding UTF8 | ConvertFrom-Json
-    if ($state.product -ne 'WordLens') { throw '安装标识不符。' }
+    if ($state.product -ne 'WordLens') { throw (Get-InstallerText '安装标识不符。' 'Install identity mismatch.') }
     $files=@();$directories=@()
     foreach ($version in $state.versions) {
-        if ($version.path -notmatch '^versions\\\d+\.\d+\.\d+-[a-f0-9]{32}$') { throw '安装版本路径不合法。' }
+        if ($version.path -notmatch '^versions\\\d+\.\d+\.\d+-[a-f0-9]{32}$') { throw (Get-InstallerText '安装版本路径不合法。' 'Invalid installed version path.') }
         $base=Resolve-OwnedPath $root $version.path; $directories += $base
         foreach ($entry in $version.files) {
             $path=Resolve-OwnedPath $base $entry.path
             if (Test-Path -LiteralPath $path) {
-                if ((Get-FileHash -LiteralPath $path).Hash -ne $entry.sha256) { throw "程序文件已变化，停止卸载并保留：$path" }
+                if ((Get-FileHash -LiteralPath $path).Hash -ne $entry.sha256) { throw (Get-InstallerText "程序文件已变化，停止卸载并保留：$path" "Application file changed; uninstall stopped and file retained: $path") }
                 $files += $path
                 $parent=[IO.Path]::GetDirectoryName($path)
                 while ($parent.StartsWith($base+'\',[StringComparison]::OrdinalIgnoreCase)) { $directories += $parent; $parent=[IO.Path]::GetDirectoryName($parent) }
@@ -198,15 +202,15 @@ function Invoke-WordLensUninstall {
     $marker=Join-Path $root 'wordlens-owner.txt'
     if ((Test-Path -LiteralPath $marker) -and (Get-Content -LiteralPath $marker -Raw) -eq 'WordLens Installer') { Remove-Item -LiteralPath $marker -Force }
     foreach ($directory in @((Join-Path $root 'versions'),$root)) { if ((Test-Path -LiteralPath $directory) -and @(Get-ChildItem -LiteralPath $directory -Force).Count -eq 0) { Remove-Item -LiteralPath $directory } }
-    Write-Output '已移除登记的程序文件。用户配置和未知文件保持不变。'
+    Write-Output (Get-InstallerText '已移除登记的程序文件。用户配置和未知文件保持不变。' 'Registered application files removed. User configuration and unknown files retained.')
 }
 if ($Mode -ne 'Library') {
     $setupMutex=$null; $created=$false
     try {
         $setupMutex=[Threading.Mutex]::new($true,'Global\tianqistudio.WordLens.Setup',[ref]$created)
-        if(-not $created){throw '另一个词镜安装或卸载程序正在运行。'}
+        if(-not $created){throw (Get-InstallerText '另一个词镜安装或卸载程序正在运行。' 'Another WordLens installation or uninstallation is running.')}
         if ($Mode -eq 'Install') { Invoke-WordLensInstall } else { Invoke-WordLensUninstall }
     }
-    catch { Write-Output ('错误：'+$_.Exception.Message); exit 1 }
+    catch { Write-Output ((Get-InstallerText '错误：' 'Error: ')+$_.Exception.Message); exit 1 }
     finally { if($setupMutex){if($created){$setupMutex.ReleaseMutex()};$setupMutex.Dispose()} }
 }

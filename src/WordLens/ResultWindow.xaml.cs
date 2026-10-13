@@ -15,7 +15,7 @@ public partial class ResultWindow : Window
 
     public ResultWindow(WorkerClient worker, TranslationService? translation = null)
     {
-        InitializeComponent();
+        InitializeComponent(); Localization.Attach(this); Loaded += (_, _) => Localization.Attach(this);
         PrimaryHost.Content = Primary = new ResultCard(worker, translation);
         ClipboardHost.Content = ClipboardResult = new ResultCard(worker, translation);
         Closing += (_, e) => { e.Cancel = true; Dismiss(); };

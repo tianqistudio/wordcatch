@@ -24,7 +24,7 @@ internal sealed class RegionSelector : Forms.Form
         StartPosition = Forms.FormStartPosition.Manual;
         Bounds = screen; TopMost = true; ShowInTaskbar = false; KeyPreview = true;
         DoubleBuffered = true; Cursor = Forms.Cursors.Cross;
-        Text = "框选翻译 · 拖动选择，Esc 或右键取消";
+        Text = Localization.Translate("框选翻译 · 拖动选择，Esc 或右键取消");
         KeyDown += (_, e) => { if (e.KeyCode == Forms.Keys.Escape) Close(); };
         MouseDown += (_, e) => {
             if (e.Button == Forms.MouseButtons.Right) { Close(); return; }
@@ -63,7 +63,7 @@ internal sealed class RegionSelector : Forms.Form
             using var pen = new Pen(Color.FromArgb(233,185,73),2);
             e.Graphics.DrawRectangle(pen,selection);
         }
-        Forms.TextRenderer.DrawText(e.Graphics,"拖动框选文字 · 松开识别 · Esc / 右键取消",Font,new Point(24,24),Color.White,Color.FromArgb(30,40,50));
+        Forms.TextRenderer.DrawText(e.Graphics,Localization.Translate("拖动框选文字 · 松开识别 · Esc / 右键取消"),Font,new Point(24,24),Color.White,Color.FromArgb(30,40,50));
     }
     protected override void Dispose(bool disposing) { if (disposing) desktop.Dispose(); base.Dispose(disposing); }
     internal static Capture? SelectRegion() { using var selector = new RegionSelector(); selector.ShowDialog(); return selector.result; }
