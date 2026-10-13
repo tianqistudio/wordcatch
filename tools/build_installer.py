@@ -23,7 +23,7 @@ def run(args):
 
 def main():
     parser=argparse.ArgumentParser()
-    parser.add_argument('--build-id',default='0.5.0-002')
+    parser.add_argument('--build-id',default='0.5.0-003')
     args=parser.parse_args()
     if not all(c.isalnum() or c in '.-' for c in args.build_id): raise ValueError('Invalid build ID')
     output=ROOT/'artifacts/installers'/args.build_id
