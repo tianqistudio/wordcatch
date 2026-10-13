@@ -6,12 +6,15 @@ namespace WordLens;
 public partial class CloudSettingsWindow : Window
 {
     private readonly TranslationService service;
+    private readonly LocalLanguagePreference languagePreference;
     private readonly UpdateService updates;
     private readonly StartupSettings startup = new();
     private readonly CancellationTokenSource lifetime = new();
-    public CloudSettingsWindow(TranslationService service, UpdateService? updates=null)
+    public CloudSettingsWindow(TranslationService service, UpdateService? updates=null) : this(service, updates, new LocalLanguagePreference()) { }
+    internal CloudSettingsWindow(TranslationService service, UpdateService? updates, LocalLanguagePreference languagePreference)
     {
-        this.service = service; this.updates=updates??new(); InitializeComponent();
+        this.languagePreference = languagePreference; this.service = service; this.updates=updates??new(); InitializeComponent(); Localization.Attach(this); Loaded += (_, _) => Localization.Attach(this);
+        LanguageChoice.SelectedIndex = (int)Localization.CurrentLanguage;
         InstalledVersion.Text="当前版本 "+UpdateService.CurrentVersionText;
         AboutVersion.Text="单词捕手 · WordCatch "+UpdateService.CurrentVersionText;
         try { StartAtLogin.IsChecked = startup.Enabled; }
@@ -23,6 +26,16 @@ public partial class CloudSettingsWindow : Window
         try { ApiKey.Password = service.Settings.GetKey(); } catch { }
         Message.Text = service.Settings.LoadError ?? "首次使用请从 Azure 资源的「密钥和终结点」复制密钥及区域。";
         Closed += (_,_) => { lifetime.Cancel(); this.updates.Changed-=RefreshUpdates; };
+    }
+    private void ChangeLanguage(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        if (!IsInitialized || LanguageChoice.SelectedIndex < 0 || Message == null) return;
+        var language = (UiLanguage)LanguageChoice.SelectedIndex;
+        if (language == Localization.CurrentLanguage) return;
+        Localization.SetLanguage(language);
+        try { languagePreference.Save(language); }
+        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException)
+        { Message.Text = "语言已切换，但无法保存偏好：" + ex.Message; }
     }
     private void RefreshUpdates()
     {

@@ -28,7 +28,7 @@ public partial class ResultCard : UserControl
     private readonly DispatcherTimer highlightTimer = new() { Interval = TimeSpan.FromSeconds(2) };
     public ResultCard(WorkerClient worker, TranslationService? translation = null)
     {
-        this.worker = worker; this.translation = translation ?? new TranslationService(); InitializeComponent();
+        this.worker = worker; this.translation = translation ?? new TranslationService(); InitializeComponent(); Localization.Attach(this); Loaded += (_, _) => Localization.Attach(this);
         highlightTimer.Tick += (_, _) => ClearHighlight();
     }
     private void SetWord(string text) { assigning = true; Word.Text = text; assigning = false; UpdateKind(); }
@@ -149,13 +149,13 @@ public partial class ResultCard : UserControl
                 {
                     try { output.AppendLine(await translation.TranslateAsync(line, cancellation)); }
                     catch (OperationCanceledException) { return true; }
-                    catch (Exception ex) { output.AppendLine("翻译失败：" + ex.Message); }
+                    catch (Exception ex) { output.AppendLine(Localization.Translate("翻译失败：" + ex.Message)); }
                 }
                 else
                 {
                     if (parts.Length == 0) parts = Regex.Matches(line, @"[A-Za-z]+(?:[’'-][A-Za-z]+)*")
                         .Select(m => m.Value).Take(100).ToArray();
-                    if (parts.Length == 0) output.AppendLine("本地未收录；整句翻译需启用云端服务。");
+                    if (parts.Length == 0) output.AppendLine(Localization.Translate("本地未收录；整句翻译需启用云端服务。"));
                     foreach (var part in parts)
                     {
                         var item = await worker.RequestAsync(new { action = "lookup", text = part });
@@ -176,10 +176,10 @@ public partial class ResultCard : UserControl
     }
     private static void AppendEntry(StringBuilder output, JsonElement entry)
     {
-        if (entry.ValueKind == JsonValueKind.Null) { output.AppendLine("本地未收录"); return; }
+        if (entry.ValueKind == JsonValueKind.Null) { output.AppendLine(Localization.Translate("本地未收录")); return; }
         string text = entry.GetProperty("translation").GetString() ?? "";
         if (text.Length == 0) text = entry.GetProperty("definition").GetString() ?? "";
-        output.AppendLine(text.Length > 0 ? text : "暂无释义");
+        output.AppendLine(text.Length > 0 ? text : Localization.Translate("暂无释义"));
     }
     private async Task<bool> TrySplitAsync(int current)
     {
@@ -198,7 +198,7 @@ public partial class ResultCard : UserControl
             definitions.Append(part);
             if (entry.ValueKind == JsonValueKind.Null)
             {
-                definitions.AppendLine().Append("本地词典未收录");
+                definitions.AppendLine().Append(Localization.Translate("本地词典未收录"));
                 continue;
             }
             found++;
@@ -206,12 +206,12 @@ public partial class ResultCard : UserControl
             if (phonetic.Length > 0) definitions.Append("  /").Append(phonetic).Append('/');
             string matched = entry.GetProperty("matched").GetString() ?? "";
             if (!string.Equals(matched, part, StringComparison.OrdinalIgnoreCase))
-                definitions.AppendLine().Append("匹配词条：").Append(matched);
+                definitions.AppendLine().Append(Localization.Translate("匹配词条：")).Append(matched);
             string chinese = entry.GetProperty("translation").GetString() ?? "";
             string english = entry.GetProperty("definition").GetString() ?? "";
             if (chinese.Length > 0) definitions.AppendLine().Append(chinese);
             if (chinese.Length == 0 && english.Length > 0) definitions.AppendLine().Append(english);
-            if (chinese.Length == 0 && english.Length == 0) definitions.AppendLine().Append("暂无释义");
+            if (chinese.Length == 0 && english.Length == 0) definitions.AppendLine().Append(Localization.Translate("暂无释义"));
         }
         Definition.Text = definitions.ToString();
         Phonetic.Text = "";

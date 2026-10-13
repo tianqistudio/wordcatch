@@ -23,7 +23,7 @@ public partial class MainWindow : Window
     private bool initialized;
     public MainWindow(bool enableUpdates = true)
     {
-        InitializeComponent();
+        InitializeComponent(); Localization.Attach(this); Loaded += (_, _) => Localization.Attach(this);
         result = new ResultWindow(worker, translation);
         shortcuts = new ShortcutManager(new LocalShortcutStore(ShortcutStorePaths.ForApplication("TianqiStudio", "WordLens")), new WindowsHotkeyRegistrar());
         shortcuts.ReplaceActions(new[] { new ShortcutAction("capture", "屏幕取词", "查词", ShortcutScopePolicy.RequiredGlobal,
@@ -36,6 +36,15 @@ public partial class MainWindow : Window
         menu.Items.Add("打开单词捕手", null, (_, _) => Dispatcher.Invoke(OpenWindow));
         menu.Items.Add("退出", null, (_, _) => Dispatcher.Invoke(Quit));
         tray = new Forms.NotifyIcon { Text = "单词捕手 · WordCatch", Icon = LoadTrayIcon(), ContextMenuStrip = menu, Visible = true };
+        void RefreshTray()
+        {
+            menu.Items[0].Text = Localization.Translate("打开单词捕手");
+            menu.Items[1].Text = Localization.Translate("退出");
+            tray.Text = Localization.Translate("单词捕手 · WordCatch");
+        }
+        RefreshTray();
+        Localization.LanguageChanged += RefreshTray;
+        Application.Current.Exit += (_, _) => Localization.LanguageChanged -= RefreshTray;
         tray.DoubleClick += (_, _) => Dispatcher.Invoke(OpenWindow);
         Closing += OnClosing; PreviewKeyDown += OnKey;
         Deactivated += (_, _) => { if (recording) EndRecording(); };
@@ -162,7 +171,7 @@ public partial class MainWindow : Window
         {
             UpdateNotice.Content="发现新版 "+release.VersionText+" · 查看更新";
             if(notifiedVersion!=release.VersionText)
-            { notifiedVersion=release.VersionText; tray.ShowBalloonTip(5000,"单词捕手有更新","新版 "+release.VersionText+" 可用，请打开程序查看。",Forms.ToolTipIcon.Info); }
+            { notifiedVersion=release.VersionText; tray.ShowBalloonTip(5000,Localization.Translate("单词捕手有更新"),Localization.Translate("新版 "+release.VersionText+" 可用，请打开程序查看。"),Forms.ToolTipIcon.Info); }
         }
     }
     private void OpenUpdate(object sender,RoutedEventArgs e)
