@@ -47,7 +47,7 @@ public sealed class UpdateClient
     public UpdateClient(HttpMessageHandler? handler = null)
     {
         http = new HttpClient(handler ?? new HttpClientHandler { AllowAutoRedirect=false }) { Timeout=TimeSpan.FromSeconds(10) };
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("WordCatch/0.6.0");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("WordCatch/0.6.1");
         http.DefaultRequestHeaders.Accept.ParseAdd("application/json");
     }
     public static Version ParseVersion(string value)

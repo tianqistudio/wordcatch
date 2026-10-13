@@ -21,9 +21,11 @@ Windows 10/11 x64 取词助手。按 **Ctrl + Alt + D**，优先读取当前软�
 
 <a id="安装使用"></a>
 
+框选结果自动提取英文；多行内容分别查词，未收录组合词拆分解释。中文等非英文字符会被忽略。
+
 ## 安装与使用
 
-当前版本 **v0.6.0**：[安装程序](https://github.com/tianqistudio/wordcatch/releases/tag/v0.6.0)（约 166 MiB）。内置运行环境、OCR 模型和词典，无需另装 Python 或 .NET。
+当前版本 **v0.6.1**：[安装程序](https://github.com/tianqistudio/wordcatch/releases/tag/v0.6.1)（约 166 MiB）。内置运行环境、OCR 模型和词典，无需另装 Python 或 .NET。
 
 1. 安装时可独立选择桌面和开始菜单快捷方式，默认均勾选。
 2. 启动后等待就绪。选中文字或把鼠标放在单词上，按快捷键查询。
