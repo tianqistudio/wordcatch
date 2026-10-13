@@ -88,7 +88,12 @@ public static class SelfTest
             await card.CaptureRegionAsync(capture);
             checks["region_text_recognized"] = card.Primary.Word.Text.Contains("Hello");
             checks["region_origin"] = card.Primary.Origin.Text == "框选翻译";
-            checks["region_cloud_disabled_hint"] = card.Primary.State.Text.Contains("云端");
+            checks["region_local_result"] = card.Primary.Definition.Text.Length > 0;
+            await card.Primary.LookupAsync("pass-with-high-score\nuniversal-installer", default);
+            checks["english_only_mixed"] = EnglishText.Extract("按 Esc") == "Esc"
+                && EnglishText.Extract("中文 Apex Legends 日本語\n中文 universal-installer") == "Apex Legends\nuniversal-installer"
+                && EnglishText.Extract("全是中文 日本語") == "";
+            checks["multiline_compound_split"] = card.Primary.Kind.Text == "分行释义" && card.Primary.Definition.Text.Contains("pass：") && card.Primary.Definition.Text.Contains("installer：");
             Render(card,Path.Combine(output,"region-result.png"));
             await card.LookupAsync("Hello",capture.Cursor,"选中文字");
             await Task.Delay(150);

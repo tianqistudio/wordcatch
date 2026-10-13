@@ -58,12 +58,14 @@ public partial class ResultCard : UserControl
         {
             var reply = await worker.RequestAsync(new { action = "ocr_region", image = capture.Image });
             if (current != generation) return;
-            string text = reply.GetProperty("text").GetString() ?? "";
+            string raw = reply.GetProperty("text").GetString() ?? "";
+            string text = EnglishText.Extract(raw);
             SetWord(text);
-            if (text.Length == 0) { State.Text = "框选区域未识别到文字，请重新框选。"; return; }
+            if (text.Length == 0) { State.Text = "框选区域未识别到英文，已忽略其他语言文字。"; return; }
+            if (text != raw) reply = await worker.RequestAsync(new { action = "lookup", text });
+            if (current != generation) return;
             if (text.Length > 2000) { State.Text = "识别文字超过 2,000 字符，请缩小框选区域。"; return; }
-            if (translation.Enabled) await TranslateCloudAsync(current);
-            else { await DisplayAsync(reply, current); if (current == generation) State.Text += " 整段翻译需在设置中启用云端服务。"; }
+            await DisplayAsync(reply, current);
         }
         catch (Exception ex) { if (current == generation) State.Text = "框选识别失败：" + ex.Message; }
         finally { if (current == generation) SetBusy(false); }
@@ -101,6 +103,7 @@ public partial class ResultCard : UserControl
     }
     private async Task DisplayAsync(JsonElement reply, int current)
     {
+        if (await TryLinesAsync(current)) return;
         var entry = reply.GetProperty("entry");
         if (entry.ValueKind == JsonValueKind.Null)
         {
@@ -122,6 +125,61 @@ public partial class ResultCard : UserControl
         string english = entry.GetProperty("definition").GetString() ?? "";
         Definition.Text = chinese + (chinese.Length > 0 && english.Length > 0 ? "\n\n" : "") + english;
         if (chinese.Length == 0 && translation.Enabled && !anki) await TranslateCloudAsync(current);
+    }
+    private async Task<bool> TryLinesAsync(int current)
+    {
+        var lines = Regex.Split(Word.Text.Trim(), @"[\r\n]+|(?<=[.!?。！？])\s+")
+            .Select(x => x.Trim()).Where(x => x.Length > 0).ToArray();
+        if (lines.Length < 2) return false;
+        var output = new StringBuilder();
+        var cancellation = requestLifetime.Token;
+        foreach (var line in lines)
+        {
+            if (current != generation) return true;
+            if (output.Length > 0) output.AppendLine().AppendLine("────────────").AppendLine();
+            output.AppendLine(line);
+            var reply = await worker.RequestAsync(new { action = "lookup", text = line });
+            if (current != generation) return true;
+            var entry = reply.GetProperty("entry");
+            if (entry.ValueKind != JsonValueKind.Null) AppendEntry(output, entry);
+            else
+            {
+                var parts = CompoundWords.Split(line);
+                if (parts.Length == 0 && translation.Enabled)
+                {
+                    try { output.AppendLine(await translation.TranslateAsync(line, cancellation)); }
+                    catch (OperationCanceledException) { return true; }
+                    catch (Exception ex) { output.AppendLine("翻译失败：" + ex.Message); }
+                }
+                else
+                {
+                    if (parts.Length == 0) parts = Regex.Matches(line, @"[A-Za-z]+(?:[’'-][A-Za-z]+)*")
+                        .Select(m => m.Value).Take(100).ToArray();
+                    if (parts.Length == 0) output.AppendLine("本地未收录；整句翻译需启用云端服务。");
+                    foreach (var part in parts)
+                    {
+                        var item = await worker.RequestAsync(new { action = "lookup", text = part });
+                        if (current != generation) return true;
+                        output.Append(part).Append("：");
+                        AppendEntry(output, item.GetProperty("entry"));
+                    }
+                }
+            }
+            if (current != generation) return true;
+            Definition.Text = output.ToString();
+        }
+        Phonetic.Text = "";
+        Kind.Text = "分行释义";
+        Source.Text = translation.Enabled ? "逐行查询 · 本地词典 / 云端翻译" : "逐行查询 · 本地词典";
+        State.Text = $"已分别处理 {lines.Length} 项；未收录的组合词拆分解释。";
+        return true;
+    }
+    private static void AppendEntry(StringBuilder output, JsonElement entry)
+    {
+        if (entry.ValueKind == JsonValueKind.Null) { output.AppendLine("本地未收录"); return; }
+        string text = entry.GetProperty("translation").GetString() ?? "";
+        if (text.Length == 0) text = entry.GetProperty("definition").GetString() ?? "";
+        output.AppendLine(text.Length > 0 ? text : "暂无释义");
     }
     private async Task<bool> TrySplitAsync(int current)
     {
