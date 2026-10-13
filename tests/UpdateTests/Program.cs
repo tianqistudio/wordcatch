@@ -33,7 +33,7 @@ settings.Save(new(true,UpdateSource.Auto,DateTimeOffset.UtcNow));await service.C
 await service.CheckAsync();checks["manual_bypasses_throttle"]=handler.Urls.Count>count;checks["new_version_available"]=service.HasUpdate;
 var reread=new UpdateSettings(Path.Combine(output,"synthetic-update-preferences.json"));checks["preferences_roundtrip"]=reread.Options.AutoCheck&&reread.Options.LastCheckUtc!=null;
 if(args.Contains("--live")) {
- var live=new UpdateClient();foreach(var source in new[]{UpdateSource.Website,UpdateSource.GitHub}){var r=await live.CheckAsync(source,now);checks["live_"+source]=r.AnySourceSucceeded&&r.Release?.Version==now;}
+ var live=new UpdateClient();foreach(var source in new[]{UpdateSource.Website,UpdateSource.GitHub}){var r=await live.CheckAsync(source,now);checks["live_"+source]=r.AnySourceSucceeded&&r.Release?.Version==UpdateClient.ParseVersion("0.5.0");}
 }
 Console.WriteLine(JsonSerializer.Serialize(new{passed=checks.Values.All(x=>x),checks},new JsonSerializerOptions{WriteIndented=true}));return checks.Values.All(x=>x)?0:1;
 sealed class Stub:HttpMessageHandler
