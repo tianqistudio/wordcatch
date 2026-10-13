@@ -7,6 +7,7 @@
   <DockPanel><Button x:Name="LookupButton" Content="查询" Style="{StaticResource PrimaryButton}" DockPanel.Dock="Right" Click="ManualLookup" Margin="10,0,0,0" IsDefault="True" IsEnabled="False"/><TextBox x:Name="Query" AutomationProperties.Name="输入单词或句子" MaxLength="2000" TextWrapping="Wrap" MaxHeight="90" VerticalScrollBarVisibility="Auto"/></DockPanel>
   <TextBlock x:Name="Status" Text="正在准备本地识别与词典…" Foreground="#E9B949" Margin="0,10,0,22"/>
   <Border Background="{StaticResource Card}" CornerRadius="10" Padding="18"><StackPanel><TextBlock Text="屏幕取词" Foreground="#B7C4CD"/><DockPanel Margin="0,10,0,8"><Button Content="更换" AutomationProperties.Name="更换取词快捷键" DockPanel.Dock="Right" Click="ChangeHotkey" Margin="10,0,0,0"/><TextBlock x:Name="HotkeyLabel" FontSize="20" VerticalAlignment="Center"/></DockPanel><TextBlock x:Name="HotkeyStatus" Foreground="#B7C4CD"/><TextBlock Text="先读取选区；无法读取时识别鼠标文字。同时查询剪贴板，两路结果分别显示。" Foreground="#B7C4CD" Margin="0,10,0,0"/></StackPanel></Border>
+  <TextBlock Text="框选翻译" FontSize="18" Margin="0,18,0,8"/><TextBlock x:Name="RegionStatus" Foreground="#B7C4CD"/>
  </StackPanel></ScrollViewer>
  <DockPanel Grid.Row="1" Margin="0,20,0,0"><Button Content="收起" ToolTip="收起到通知区域，快捷键仍可使用" DockPanel.Dock="Right" Click="HideWindow" Margin="8,0,0,0"/><Button Content="退出" DockPanel.Dock="Right" Click="ExitApp" Margin="8,0,0,0"/><Button Content="设置与关于" Click="OpenCloudSettings" HorizontalAlignment="Left"/></DockPanel>
  </Grid>
