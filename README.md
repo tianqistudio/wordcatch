@@ -55,3 +55,5 @@ C# / WPF、Windows UI Automation、RapidOCR + ONNX Runtime CPU、ECDICT SQLite�
 ## 源码与版权
 
 源码公开供查看，版权与第三方许可见 [NOTICE.md](NOTICE.md)。
+
+由 [tianqistudio](https://tianqistudio.com/home) 制作。
