@@ -64,6 +64,22 @@ function Restore-RegSnapshot([string]$Path,$Snapshot) {
         foreach ($name in $Snapshot.Keys) { New-ItemProperty -LiteralPath $Path -Name $name -Value $Snapshot[$name][0] -PropertyType $Snapshot[$name][1] -Force | Out-Null }
     }
 }
+function Get-StartupCommand {
+    $key=[Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Software\Microsoft\Windows\CurrentVersion\Run')
+    try { if($key){return $key.GetValue('TianqiStudio.WordLens')} } finally { if($key){$key.Dispose()} }
+}
+function Set-StartupCommand($Command) {
+    $key=[Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Software\Microsoft\Windows\CurrentVersion\Run')
+    try {
+        if($null -eq $Command){$key.DeleteValue('TianqiStudio.WordLens',$false)}
+        else {$key.SetValue('TianqiStudio.WordLens',$Command,[Microsoft.Win32.RegistryValueKind]::String)}
+    } finally {$key.Dispose()}
+}
+function Test-OwnedStartup($Command,[string]$Root) {
+    if($Command -isnot [string] -or $Command -notmatch '^"([^"\r\n]+)" --startup$'){return $false}
+    $exe=[IO.Path]::GetFullPath($Matches[1])
+    return $exe.StartsWith($Root+'\',[StringComparison]::OrdinalIgnoreCase) -and [IO.Path]::GetFileName($exe) -eq 'WordLens.exe'
+}
 function Invoke-WordLensInstall {
     $root=Get-InstallRoot
     Assert-NoReparse $root; Assert-NoReparse $Payload; Assert-AppStopped
@@ -93,6 +109,7 @@ function Invoke-WordLensInstall {
         Assert-LinkOwned $link.Path $root
         $savedLinks[$link.Path]=if(Test-Path -LiteralPath $link.Path){[IO.File]::ReadAllBytes($link.Path)}else{$null}
     }
+    $startupBackup=Get-StartupCommand; $startupChanged=$false
     $regBackup=Get-RegSnapshot $reg; $unregBackup=Get-RegSnapshot $unreg
     $folder='versions\'+$manifest.version+'-'+[Guid]::NewGuid().ToString('N')
     $destination=Resolve-OwnedPath $root $folder
@@ -127,11 +144,16 @@ function Invoke-WordLensInstall {
         foreach ($pair in @{DesktopShortcut=$Desktop;StartMenuShortcut=$StartMenu}.GetEnumerator()) { New-ItemProperty -LiteralPath $reg -Name $pair.Key -Value $pair.Value -PropertyType DWord -Force | Out-Null }
         foreach ($pair in @{DisplayName='单词捕手 · WordCatch';DisplayVersion=$manifest.version;Publisher='tianqistudio';InstallLocation=$root;UninstallString=('"'+$uninstaller+'"');DisplayIcon=(Join-Path $destination 'WordLens.exe')}.GetEnumerator()) { New-ItemProperty -LiteralPath $unreg -Name $pair.Key -Value $pair.Value -PropertyType String -Force | Out-Null }
         foreach ($name in 'NoModify','NoRepair') { New-ItemProperty -LiteralPath $unreg -Name $name -Value 1 -PropertyType DWord -Force | Out-Null }
+        if(Test-OwnedStartup $startupBackup $root) {
+            $startupChanged=$true
+            Set-StartupCommand ('"'+(Join-Path $destination 'WordLens.exe')+'" --startup')
+        }
         $json=$state | ConvertTo-Json -Depth 8
         [IO.File]::WriteAllText($statePath+'.new',$json,[Text.UTF8Encoding]::new($false))
         if (Test-Path -LiteralPath $statePath) { [IO.File]::Replace($statePath+'.new',$statePath,[System.Management.Automation.Language.NullString]::Value) } else { [IO.File]::Move($statePath+'.new',$statePath) }
     } catch {
         $failure=$_
+        if($startupChanged){Set-StartupCommand $startupBackup}
         foreach ($link in $links) {
             if ($null -ne $savedLinks[$link.Path]) { [IO.File]::WriteAllBytes($link.Path,$savedLinks[$link.Path]) }
             elseif (Test-Path -LiteralPath $link.Path) { Remove-Item -LiteralPath $link.Path -Force }
@@ -164,6 +186,8 @@ function Invoke-WordLensUninstall {
     }
     $links=@(Get-LinkPlan $root 0 0)
     foreach ($link in $links) { Assert-LinkOwned $link.Path $root }
+    $startupCommand=Get-StartupCommand
+    if(Test-OwnedStartup $startupCommand $root){Set-StartupCommand $null}
     foreach ($path in $files) { Remove-Item -LiteralPath $path -Force }
     foreach ($directory in ($directories | Sort-Object Length -Descending -Unique)) {
         if ((Test-Path -LiteralPath $directory) -and @(Get-ChildItem -LiteralPath $directory -Force).Count -eq 0) { Remove-Item -LiteralPath $directory }

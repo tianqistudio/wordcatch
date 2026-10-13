@@ -20,14 +20,17 @@ public partial class MainWindow : Window
     private readonly System.Windows.Threading.DispatcherTimer updateTimer = new() { Interval=TimeSpan.FromMinutes(15) };
     private string? notifiedVersion;
     private bool exiting, capturing, recording;
+    private bool initialized;
     public MainWindow(bool enableUpdates = true)
     {
         InitializeComponent();
         result = new ResultWindow(worker, translation);
         shortcuts = new ShortcutManager(new LocalShortcutStore(ShortcutStorePaths.ForApplication("TianqiStudio", "WordLens")), new WindowsHotkeyRegistrar());
         shortcuts.ReplaceActions(new[] { new ShortcutAction("capture", "屏幕取词", "查词", ShortcutScopePolicy.RequiredGlobal,
-            new ShortcutBinding(new ShortcutChord(0x44, ShortcutModifiers.Control | ShortcutModifiers.Alt), true), "优先查询选区，其次识别鼠标下的单词，同时查询剪贴板") });
-        shortcuts.ActionRequested += action => { _ = CaptureAsync(); };
+            new ShortcutBinding(new ShortcutChord(0x44, ShortcutModifiers.Control | ShortcutModifiers.Alt), true), "优先查询选区，其次识别鼠标下的单词，同时查询剪贴板"),
+            new ShortcutAction("region", "框选翻译", "查词", ShortcutScopePolicy.RequiredGlobal,
+                new ShortcutBinding(new ShortcutChord(0x44, ShortcutModifiers.Control | ShortcutModifiers.Shift | ShortcutModifiers.Alt), true), "拖动选择屏幕区域并翻译") });
+        shortcuts.ActionRequested += action => { if (action == "region") _ = CaptureRegionAsync(); else _ = CaptureAsync(); };
         shortcuts.ChordCaptured += chord => { if (recording && chord != null) SaveChord(chord); };
         var menu = new Forms.ContextMenuStrip();
         menu.Items.Add("打开单词捕手", null, (_, _) => Dispatcher.Invoke(OpenWindow));
@@ -38,14 +41,37 @@ public partial class MainWindow : Window
         Deactivated += (_, _) => { if (recording) EndRecording(); };
         updates.Changed += RefreshUpdates;
         updateTimer.Tick += async (_,_) => await updates.CheckAutomaticAsync();
-        Loaded += async (_, _) => { await PrepareAsync(); if(enableUpdates) { updateTimer.Start(); await updates.CheckAutomaticAsync(); } };
+        Loaded += async (_, _) => await InitializeAsync(enableUpdates);
         Application.Current.Exit += (_, _) => { tray.Dispose(); shortcuts.Dispose(); worker.Dispose(); };
         RefreshHotkey();
+    }
+    internal async Task InitializeAsync(bool enableUpdates = true)
+    {
+        if (initialized) return;
+        initialized = true;
+        await PrepareAsync();
+        if (enableUpdates) { updateTimer.Start(); await updates.CheckAutomaticAsync(); }
     }
     private async Task PrepareAsync()
     {
         try { await worker.StartAsync(); Status.Text = "已就绪，可输入查询或使用快捷键取词。"; LookupButton.IsEnabled = true; }
         catch (Exception ex) { Status.Text = "初始化失败：" + ex.Message + " 可再次查词重试。"; LookupButton.IsEnabled = true; }
+    }
+    private async Task CaptureRegionAsync()
+    {
+        if (capturing || recording) return;
+        Task? query = null;
+        capturing = true;
+        try
+        {
+            result.Dismiss();
+            await Task.Delay(100);
+            var capture = RegionSelector.SelectRegion();
+            if (capture != null) query = result.CaptureRegionAsync(capture);
+        }
+        catch (Exception ex) { Status.Text = "框选失败：" + ex.Message; OpenWindow(); }
+        finally { capturing = false; }
+        if (query != null) await query;
     }
     private async Task CaptureAsync()
     {
@@ -87,6 +113,7 @@ public partial class MainWindow : Window
     }
     private void RefreshHotkey()
     {
+        RegionStatus.Text = shortcuts.Errors.TryGetValue("region", out var regionError) ? "框选快捷键冲突：" + regionError : "Ctrl + Shift + Alt + D · 拖动框选，Esc 取消";
         var chord = shortcuts.Bindings["capture"].Chord;
         HotkeyLabel.Text = chord == null ? "未设置" : string.Join(" + ", new[] {
             chord.Modifiers.HasFlag(ShortcutModifiers.Control) ? "Ctrl" : null,

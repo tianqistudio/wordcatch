@@ -85,6 +85,11 @@ public static class SelfTest
             var foreground = Native.GetForegroundWindow();
             var disabled = new TranslationService(new CloudSettings(Path.Combine(output,"absent-settings.json")));
             card = new ResultWindow(worker, disabled);
+            await card.CaptureRegionAsync(capture);
+            checks["region_text_recognized"] = card.Primary.Word.Text.Contains("Hello");
+            checks["region_origin"] = card.Primary.Origin.Text == "框选翻译";
+            checks["region_cloud_disabled_hint"] = card.Primary.State.Text.Contains("云端");
+            Render(card,Path.Combine(output,"region-result.png"));
             await card.LookupAsync("Hello",capture.Cursor,"选中文字");
             await Task.Delay(150);
             checks["popup_does_not_activate"] = foreground == Native.GetForegroundWindow();
@@ -187,7 +192,23 @@ public static class SelfTest
             cloudCard.Dismiss();
             card.Dismiss();
             sample.Close(); sample=null;
-            var main = new MainWindow(false); main.Show();
+            var startupTestKey = @"Software\TianqiStudio\WordLens\Tests\" + Guid.NewGuid().ToString("N");
+            try
+            {
+                var startup = new StartupSettings(startupTestKey);
+                checks["startup_default_off"] = !startup.Enabled;
+                startup.Save(true);
+                using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(startupTestKey))
+                    checks["startup_command_quoted"] = (string?)key?.GetValue(StartupSettings.ValueName) == StartupSettings.Command(Environment.ProcessPath!);
+                checks["startup_enabled_saved"] = new StartupSettings(startupTestKey).Enabled;
+                startup.Save(false);
+                checks["startup_disabled_saved"] = !new StartupSettings(startupTestKey).Enabled;
+            }
+            finally { Microsoft.Win32.Registry.CurrentUser.DeleteSubKey(startupTestKey, false); }
+            var main = new MainWindow(false);
+            await main.InitializeAsync(false);
+            checks["startup_hidden_initialized"] = !main.IsVisible && main.LookupButton.IsEnabled;
+            main.Show();
             for (int i=0; i<900 && !main.LookupButton.IsEnabled; i++) await Task.Delay(100);
             checks["main_ready"] = main.Status.Text.StartsWith("已就绪");
             Render(main,Path.Combine(output,"main-window.png"));
@@ -197,6 +218,7 @@ public static class SelfTest
             checks["minimum_query_visible"] = main.Query.ActualWidth > 150 && main.LookupButton.ActualWidth > 30;
             var settings = new CloudSettingsWindow(disabled) { Owner=main };
             settings.Show(); await Task.Delay(100); Render(settings,Path.Combine(output,"cloud-settings.png"));
+            checks["startup_option_visible"] = settings.StartAtLogin.IsVisible;
             checks["update_settings_visible"] = settings.CheckUpdate.IsVisible && settings.UpdateSourceChoice.Items.Count==3;
             checks["update_auto_default"] = settings.AutoUpdate.IsChecked==true;
             settings.Close();

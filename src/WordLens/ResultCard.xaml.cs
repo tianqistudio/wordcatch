@@ -51,6 +51,24 @@ public partial class ResultCard : UserControl
         Source.Text = source;
         SetBusy(false);
     }
+    public async Task CaptureRegionAsync(Capture capture)
+    {
+        int current = Begin("", capture.Cursor, "正在识别框选区域…", "框选翻译");
+        try
+        {
+            var reply = await worker.RequestAsync(new { action = "ocr_region", image = capture.Image });
+            if (current != generation) return;
+            string text = reply.GetProperty("text").GetString() ?? "";
+            SetWord(text);
+            if (text.Length == 0) { State.Text = "框选区域未识别到文字，请重新框选。"; return; }
+            if (text.Length > 2000) { State.Text = "识别文字超过 2,000 字符，请缩小框选区域。"; return; }
+            if (translation.Enabled) await TranslateCloudAsync(current);
+            else { await DisplayAsync(reply, current); if (current == generation) State.Text += " 整段翻译需在设置中启用云端服务。"; }
+        }
+        catch (Exception ex) { if (current == generation) State.Text = "框选识别失败：" + ex.Message; }
+        finally { if (current == generation) SetBusy(false); }
+    }
+
     public async Task CaptureAsync(Capture capture)
     {
         int current = Begin("", capture.Cursor, "正在识别鼠标附近的文字…", "屏幕识别");
@@ -93,6 +111,8 @@ public partial class ResultCard : UserControl
             if (translation.Enabled) await TranslateCloudAsync(current);
             return;
         }
+        bool anki = entry.TryGetProperty("source", out var entrySource);
+        if (anki) Source.Text = entrySource.GetString() ?? "Anki 本地短语库";
         string phonetic = entry.GetProperty("phonetic").GetString() ?? "";
         Phonetic.Text = phonetic.Length > 0 ? $"/{phonetic}/" : "";
         string matched = entry.GetProperty("matched").GetString() ?? "";
@@ -101,7 +121,7 @@ public partial class ResultCard : UserControl
         string chinese = entry.GetProperty("translation").GetString() ?? "";
         string english = entry.GetProperty("definition").GetString() ?? "";
         Definition.Text = chinese + (chinese.Length > 0 && english.Length > 0 ? "\n\n" : "") + english;
-        if (chinese.Length == 0 && translation.Enabled) await TranslateCloudAsync(current);
+        if (chinese.Length == 0 && translation.Enabled && !anki) await TranslateCloudAsync(current);
     }
     private async Task<bool> TrySplitAsync(int current)
     {

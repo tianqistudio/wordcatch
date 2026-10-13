@@ -10,11 +10,11 @@ Name "单词捕手 · WordCatch"
 OutFile "${OUTPUT}"
 InstallDir "$PROGRAMFILES64\tianqistudio\WordLens"
 BrandingText "tianqistudio · WordCatch"
-VIProductVersion "0.5.0.0"
+VIProductVersion "0.6.0.0"
 VIAddVersionKey /LANG=2052 "ProductName" "单词捕手 · WordCatch"
 VIAddVersionKey /LANG=2052 "CompanyName" "tianqistudio"
 VIAddVersionKey /LANG=2052 "FileDescription" "单词捕手 · WordCatch安装程序"
-VIAddVersionKey /LANG=2052 "FileVersion" "0.5.0"
+VIAddVersionKey /LANG=2052 "FileVersion" "0.6.0"
 VIAddVersionKey /LANG=2052 "LegalCopyright" "tianqistudio"
 ShowInstDetails show
 ShowUninstDetails show
@@ -25,11 +25,11 @@ Var MenuBox
 !define MUI_ICON "../src/WordLens/Assets/wordcatch.ico"
 !define MUI_UNICON "../src/WordLens/Assets/wordcatch.ico"
 !define MUI_ABORTWARNING
-!define MUI_WELCOMEPAGE_TEXT "安装 单词捕手 · WordCatch 0.5.0。$\r$\n$\r$\n包含本地 OCR、离线词典及全部运行环境，无需另装 Python 或 .NET。$\r$\n$\r$\n请先退出正在运行的单词捕手。Azure 云端备用需要安装后填写自己的密钥，默认关闭。"
+!define MUI_WELCOMEPAGE_TEXT "安装 单词捕手 · WordCatch 0.6.0。$\r$\n$\r$\n包含本地 OCR、离线词典及全部运行环境，无需另装 Python 或 .NET。$\r$\n$\r$\n请先退出正在运行的单词捕手。Azure 云端备用需要安装后填写自己的密钥，默认关闭。"
 !insertmacro MUI_PAGE_WELCOME
 Page custom OptionsPage OptionsLeave
 !insertmacro MUI_PAGE_INSTFILES
-!define MUI_FINISHPAGE_TEXT "单词捕手 · WordCatch已安装。$\r$\n$\r$\n请从快捷方式或安装目录打开。选中文字后按 Ctrl + Alt + D 查询；无法读取选区时自动改用鼠标位置 OCR。$\r$\n$\r$\n程序不会开机自启。Azure 翻译在设置中配置并启用。"
+!define MUI_FINISHPAGE_TEXT "单词捕手 · WordCatch已安装。$\r$\n$\r$\n请从快捷方式或安装目录打开。选中文字后按 Ctrl + Alt + D 查询；无法读取选区时自动改用鼠标位置 OCR。$\r$\n$\r$\n开机自启动默认关闭，可在设置中开启。Azure 翻译在设置中配置并启用。"
 !insertmacro MUI_PAGE_FINISH
 !define MUI_UNCONFIRMPAGE_TEXT_TOP "卸载前请从通知区域退出单词捕手。$\r$\n$\r$\n将移除安装器登记的程序文件和快捷方式。你的快捷键与加密云端配置保留在用户目录。"
 !insertmacro MUI_UNPAGE_CONFIRM

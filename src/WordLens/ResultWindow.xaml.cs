@@ -68,6 +68,12 @@ public partial class ResultWindow : Window
         return Primary.LookupAsync(text, point, origin);
     }
 
+    public Task CaptureRegionAsync(Capture capture)
+    {
+        Present(capture.Cursor, false);
+        return Primary.CaptureRegionAsync(capture);
+    }
+
     public Task CaptureAsync(Capture capture)
     {
         Present(capture.Cursor, false);

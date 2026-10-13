@@ -16,3 +16,6 @@ release-manifest.json
 .vs/
 *.user
 *.log
+
+# Private extracts from local Anki notes
+data/anki-phrases*.json

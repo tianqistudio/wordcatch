@@ -7,11 +7,15 @@ public partial class CloudSettingsWindow : Window
 {
     private readonly TranslationService service;
     private readonly UpdateService updates;
+    private readonly StartupSettings startup = new();
     private readonly CancellationTokenSource lifetime = new();
     public CloudSettingsWindow(TranslationService service, UpdateService? updates=null)
     {
         this.service = service; this.updates=updates??new(); InitializeComponent();
         InstalledVersion.Text="当前版本 "+UpdateService.CurrentVersionText;
+        AboutVersion.Text="单词捕手 · WordCatch "+UpdateService.CurrentVersionText;
+        try { StartAtLogin.IsChecked = startup.Enabled; }
+        catch (Exception ex) { StartAtLogin.IsEnabled = false; StartupHint.Text = "无法读取启动设置：" + ex.Message; }
         AutoUpdate.IsChecked=this.updates.Settings.Options.AutoCheck;
         UpdateSourceChoice.SelectedIndex=(int)this.updates.Settings.Options.Source;
         RefreshUpdates(); this.updates.Changed+=RefreshUpdates;
@@ -36,7 +40,7 @@ public partial class CloudSettingsWindow : Window
     { try { updates.OpenRelease(); } catch(Exception) { UpdateStatus.Text="无法打开浏览器，请稍后重试。"; } }
     private void Save(object sender, RoutedEventArgs e)
     {
-        try { service.Settings.Save(Enabled.IsChecked == true, Region.Text, ApiKey.Password); updates.Settings.Save(updates.Settings.Options with { AutoCheck=AutoUpdate.IsChecked==true, Source=(UpdateSource)UpdateSourceChoice.SelectedIndex }); DialogResult = true; }
+        try { service.Settings.Save(Enabled.IsChecked == true, Region.Text, ApiKey.Password); updates.Settings.Save(updates.Settings.Options with { AutoCheck=AutoUpdate.IsChecked==true, Source=(UpdateSource)UpdateSourceChoice.SelectedIndex }); if (StartAtLogin.IsEnabled) startup.Save(StartAtLogin.IsChecked == true); DialogResult = true; }
         catch (Exception ex) { Message.Text = "保存失败：" + ex.Message; }
     }
     private void Cancel(object sender, RoutedEventArgs e) => Close();

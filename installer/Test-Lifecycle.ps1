@@ -7,6 +7,9 @@ if (-not $script:qaRoot.StartsWith($allowed+'\',[StringComparison]::OrdinalIgnor
 if(Test-Path -LiteralPath $script:qaRoot){throw 'Use a fresh fixture directory.'}
 New-Item -ItemType Directory -Path $script:qaRoot | Out-Null
 $script:registry=@{}; $script:failRegistry=$false
+$script:startupCommand=$null
+function Get-StartupCommand { return $script:startupCommand }
+function Set-StartupCommand($Command) { $script:startupCommand=$Command }
 function Assert-AppStopped { }
 function Get-InstallRoot { return (Join-Path $script:qaRoot 'installed') }
 function Get-LinkPlan([string]$Root,[int]$Desktop,[int]$StartMenu) {
@@ -52,13 +55,18 @@ $script:Desktop=0;$script:StartMenu=1
 Invoke-WordLensInstall | Out-Null
 $root=Get-InstallRoot;$statePath=Join-Path $root 'install-state.json'
 $initial=Get-Content -LiteralPath $statePath -Encoding UTF8 -Raw | ConvertFrom-Json
+$checks.ForeignStartupPreserved=(!(Test-OwnedStartup '"C:\Other\WordLens.exe" --startup' $root))
 $checks.FirstInstall=(Test-Path -LiteralPath (Join-Path $root ($initial.current+'\使用说明.md')))
+$checks.StartupOffByDefault=($null -eq $script:startupCommand)
+$script:startupCommand='"'+(Join-Path $root ($initial.current+'\WordLens.exe'))+'" --startup'
 $checks.MenuOnly=(!(Test-Path -LiteralPath (Join-Path $script:qaRoot 'links\desktop.lnk')) -and (Test-Path -LiteralPath (Join-Path $script:qaRoot 'links\menu.lnk')))
 Copy-Item -LiteralPath (Join-Path $script:qaRoot 'links\menu.lnk') -Destination (Join-Path $script:qaRoot 'links\legacy.lnk')
 Invoke-WordLensInstall | Out-Null
 $checks.LegacyShortcutRemoved=(!(Test-Path -LiteralPath (Join-Path $script:qaRoot 'links\legacy.lnk')))
 $same=Get-Content -LiteralPath $statePath -Encoding UTF8 -Raw | ConvertFrom-Json
+$checks.StartupMigrated=($script:startupCommand -eq ('"'+(Join-Path $root ($same.current+'\WordLens.exe'))+'" --startup'))
 $checks.SameVersionNewDirectory=($same.current -ne $initial.current -and $same.versions.Count -eq 2)
+$beforeStartup=$script:startupCommand
 $beforeState=[IO.File]::ReadAllText($statePath)
 $beforeLink=(Get-FileHash -LiteralPath (Join-Path $script:qaRoot 'links\menu.lnk')).Hash
 Copy-Item -LiteralPath (Join-Path $script:qaRoot 'links\menu.lnk') -Destination (Join-Path $script:qaRoot 'links\legacy.lnk')
@@ -66,6 +74,7 @@ $script:failRegistry=$true
 try{Invoke-WordLensInstall | Out-Null;$checks.RegistryFailure=$false}catch{$checks.RegistryFailure=$_.Exception.Message.Contains('Synthetic')}
 $script:failRegistry=$false
 $checks.LegacyShortcutRestored=(Test-Path -LiteralPath (Join-Path $script:qaRoot 'links\legacy.lnk'))
+$checks.RollbackStartup=($script:startupCommand -eq $beforeStartup)
 $checks.RollbackState=([IO.File]::ReadAllText($statePath) -eq $beforeState)
 $checks.RollbackLink=((Get-FileHash -LiteralPath (Join-Path $script:qaRoot 'links\menu.lnk')).Hash -eq $beforeLink)
 Make-Payload '0.1.0'
@@ -78,6 +87,7 @@ $checks.Upgrade=($latest.version -eq '0.3.0' -and $latest.versions.Count -eq 3)
 $checks.BothShortcutsOff=(!(Test-Path -LiteralPath (Join-Path $script:qaRoot 'links\desktop.lnk')) -and !(Test-Path -LiteralPath (Join-Path $script:qaRoot 'links\menu.lnk')))
 $unknown=Join-Path $root 'user-created.txt';[IO.File]::WriteAllText($unknown,'protected fixture')
 Invoke-WordLensUninstall | Out-Null
+$checks.StartupRemoved=($null -eq $script:startupCommand)
 $checks.UninstallStateRemoved=(!(Test-Path -LiteralPath $statePath))
 $checks.UnknownFilePreserved=(Test-Path -LiteralPath $unknown)
 $checks.FakeRegistryRemoved=($script:registry.Count -eq 0)
