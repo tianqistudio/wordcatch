@@ -1,4 +1,4 @@
-﻿Unicode true
+Unicode true
 RequestExecutionLevel admin
 ManifestDPIAware true
 SetCompressor /SOLID lzma
@@ -10,15 +10,15 @@ Name "$(String0)"
 OutFile "${OUTPUT}"
 InstallDir "$PROGRAMFILES64\tianqistudio\WordLens"
 BrandingText "tianqistudio · WordCatch"
-VIProductVersion "0.7.0.0"
+VIProductVersion "0.7.1.0"
 VIAddVersionKey /LANG=2052 "ProductName" "单词捕手 · WordCatch"
 VIAddVersionKey /LANG=1033 "ProductName" "WordCatch"
 VIAddVersionKey /LANG=2052 "CompanyName" "tianqistudio"
 VIAddVersionKey /LANG=1033 "CompanyName" "tianqistudio"
 VIAddVersionKey /LANG=2052 "FileDescription" "单词捕手 · WordCatch安装程序"
 VIAddVersionKey /LANG=1033 "FileDescription" "WordCatch Installer"
-VIAddVersionKey /LANG=2052 "FileVersion" "0.7.0"
-VIAddVersionKey /LANG=1033 "FileVersion" "0.7.0"
+VIAddVersionKey /LANG=2052 "FileVersion" "0.7.1"
+VIAddVersionKey /LANG=1033 "FileVersion" "0.7.1"
 VIAddVersionKey /LANG=2052 "LegalCopyright" "tianqistudio"
 VIAddVersionKey /LANG=1033 "LegalCopyright" "tianqistudio"
 ShowInstDetails show
@@ -50,8 +50,8 @@ LangString String0 ${LANG_SIMPCHINESE} "单词捕手 · WordCatch"
 LangString String0 ${LANG_ENGLISH} "WordCatch"
 LangString String1 ${LANG_SIMPCHINESE} "单词捕手 · WordCatch安装程序"
 LangString String1 ${LANG_ENGLISH} "WordCatch Installer"
-LangString String2 ${LANG_SIMPCHINESE} "安装 单词捕手 · WordCatch 0.7.0。$\r$\n$\r$\n包含本地 OCR、离线词典及全部运行环境，无需另装 Python 或 .NET。$\r$\n$\r$\n请先退出正在运行的单词捕手。Azure 云端备用需要安装后填写自己的密钥，默认关闭。"
-LangString String2 ${LANG_ENGLISH} "Install WordCatch 0.7.0.$\r$\n$\r$\nIncludes local OCR, an offline dictionary and all runtimes. No separate Python or .NET installation is needed.$\r$\n$\r$\nExit WordCatch before installing. Optional Azure translation requires your own API key and is off by default."
+LangString String2 ${LANG_SIMPCHINESE} "安装 单词捕手 · WordCatch 0.7.1。$\r$\n$\r$\n包含本地 OCR、离线词典及全部运行环境，无需另装 Python 或 .NET。$\r$\n$\r$\n请先退出正在运行的单词捕手。Azure 云端备用需要安装后填写自己的密钥，默认关闭。"
+LangString String2 ${LANG_ENGLISH} "Install WordCatch 0.7.1.$\r$\n$\r$\nIncludes local OCR, an offline dictionary and all runtimes. No separate Python or .NET installation is needed.$\r$\n$\r$\nExit WordCatch before installing. Optional Azure translation requires your own API key and is off by default."
 LangString String3 ${LANG_SIMPCHINESE} "单词捕手 · WordCatch已安装。$\r$\n$\r$\n请从快捷方式或安装目录打开。选中文字后按 Ctrl + Alt + D 查询；无法读取选区时自动改用鼠标位置 OCR。$\r$\n$\r$\n开机自启动默认关闭，可在设置中开启。Azure 翻译在设置中配置并启用。"
 LangString String3 ${LANG_ENGLISH} "WordCatch is installed.$\r$\n$\r$\nOpen it from a shortcut or the install folder. Select text and press Ctrl + Alt + D; OCR at the pointer is used when selection capture is unavailable.$\r$\n$\r$\nChoose Chinese or English in Settings & About. Startup and optional Azure translation are configured there."
 LangString String4 ${LANG_SIMPCHINESE} "卸载前请从通知区域退出单词捕手。$\r$\n$\r$\n将移除安装器登记的程序文件和快捷方式。你的快捷键与加密云端配置保留在用户目录。"

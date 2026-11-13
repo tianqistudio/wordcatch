@@ -1,18 +1,26 @@
 """Verify NSIS container and every embedded payload byte without installing or extracting to disk."""
+import argparse
+import re
 import hashlib
 import json
 import subprocess
 import sys
 from pathlib import Path
+from seven_zip import resolve_seven_zip
 
 ROOT=Path(__file__).resolve().parents[1]
 
 
 def main():
-    build=sys.argv[1]
+    parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('build_id')
+    parser.add_argument('--seven-zip')
+    args=parser.parse_args()
+    build=args.build_id
+    if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9.-]*',build): raise ValueError('Invalid build ID')
+    seven,toolchain=resolve_seven_zip(args.seven_zip)
     output=ROOT/'artifacts/installers'/build
     exe=ROOT/json.loads((output/'build.json').read_text(encoding='utf-8'))['installer']
-    seven=ROOT.parent/'DEV_FanOrder/installer/tools/7zip-full-26.03/7z.exe'
     tested=subprocess.run([str(seven),'t',str(exe),'-bd'],capture_output=True,check=True)
     listing=subprocess.run([str(seven),'l','-slt','-sccUTF-8',str(exe)],capture_output=True,check=True).stdout.decode('utf-8').replace('\r\n','\n')
     entries=[]
@@ -40,7 +48,7 @@ def main():
         if process.returncode: raise RuntimeError(err.decode(errors='replace'))
     finally:
         if process.poll() is None: process.kill();process.wait()
-    report={'passed':True,'container_crc_test':True,'embedded_files_hash_verified':len(checked),'embedded_payload_bytes':sum(s for _,s in entries),'installed':False,'method':'7-Zip test and streamed extraction to SHA-256; no files extracted to disk'}
+    report={'toolchain':toolchain,'passed':True,'container_crc_test':True,'embedded_files_hash_verified':len(checked),'embedded_payload_bytes':sum(s for _,s in entries),'installed':False,'method':'7-Zip test and streamed extraction to SHA-256; no files extracted to disk'}
     (output/'container-verification.json').write_text(json.dumps(report,indent=2),encoding='utf-8')
     print(json.dumps(report))
 

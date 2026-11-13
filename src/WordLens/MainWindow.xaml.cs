@@ -35,12 +35,12 @@ public partial class MainWindow : Window
         var menu = new Forms.ContextMenuStrip();
         menu.Items.Add("打开单词捕手", null, (_, _) => Dispatcher.Invoke(OpenWindow));
         menu.Items.Add("退出", null, (_, _) => Dispatcher.Invoke(Quit));
-        tray = new Forms.NotifyIcon { Text = "单词捕手 · WordCatch", Icon = LoadTrayIcon(), ContextMenuStrip = menu, Visible = true };
+        tray = new Forms.NotifyIcon { Text = "单词捕手 WordCatch", Icon = LoadTrayIcon(), ContextMenuStrip = menu, Visible = true };
         void RefreshTray()
         {
             menu.Items[0].Text = Localization.Translate("打开单词捕手");
             menu.Items[1].Text = Localization.Translate("退出");
-            tray.Text = Localization.Translate("单词捕手 · WordCatch");
+            tray.Text = Localization.Translate("单词捕手 WordCatch");
         }
         RefreshTray();
         Localization.LanguageChanged += RefreshTray;

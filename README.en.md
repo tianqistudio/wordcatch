@@ -19,7 +19,7 @@ A text lookup assistant for Windows 10/11 x64. Press **Ctrl + Alt + D** to read 
 
 ## Install and use
 
-Download the **[v0.7.0 installer](https://github.com/tianqistudio/wordcatch/releases/tag/v0.7.0)**. It includes the runtime, OCR models and dictionary; no separate Python or .NET installation is required.
+Download the **[v0.7.1 installer](https://github.com/tianqistudio/wordcatch/releases/tag/v0.7.1)**. It includes the runtime, OCR models and dictionary; no separate Python or .NET installation is required.
 
 1. Choose English or Simplified Chinese in the installer. Desktop and Start menu shortcuts are independently selectable and initially checked. Upgrades retain previous choices and settings.
 2. Open WordCatch and wait for it to be ready. Select text or point at a word, then press the lookup shortcut.
@@ -67,10 +67,10 @@ dotnet build src/WordLens/WordLens.csproj
 Build a new installer with a unique build ID, then validate its payload without installing it:
 
 ```powershell
-.\.venv\Scripts\python.exe tools/build_installer.py --build-id 0.7.0-005
-.\.venv\Scripts\python.exe tools/verify_installer.py 0.7.0-005
+.\.venv\Scripts\python.exe tools/build_installer.py --build-id 0.7.1-005
+.\.venv\Scripts\python.exe tools/verify_installer.py 0.7.1-005
 $env:WORDLENS_QA_OUTPUT = "$PWD/artifacts/qa/bilingual-070"
-& ./artifacts/installers/0.7.0-005/payload/WordLens.exe --self-test
+& ./artifacts/installers/0.7.1-005/payload/WordLens.exe --self-test
 ```
 
 The self-test uses synthetic text and test windows for OCR/selection checks, mock cloud responses, and a separate startup registry key. It does not verify every third-party app or a real Azure subscription. Installer archive validation checks embedded files without executing installation.
