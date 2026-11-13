@@ -9,6 +9,7 @@ import subprocess
 import sys
 import zipfile
 from pathlib import Path
+from seven_zip import resolve_seven_zip
 
 ROOT=Path(__file__).resolve().parents[1]
 
@@ -23,8 +24,10 @@ def run(args):
 
 def main():
     parser=argparse.ArgumentParser()
-    parser.add_argument('--build-id',default='0.7.0-001')
+    parser.add_argument('--build-id',default='0.7.1-001')
+    parser.add_argument('--seven-zip')
     args=parser.parse_args()
+    seven,_=resolve_seven_zip(args.seven_zip)
     if not all(c.isalnum() or c in '.-' for c in args.build_id): raise ValueError('Invalid build ID')
     output=ROOT/'artifacts/installers'/args.build_id
     output.mkdir(parents=True,exist_ok=False)
@@ -71,13 +74,16 @@ def main():
                     target.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(original,target)
     (licenses/'python-dependencies.json').write_text(json.dumps(metadata,ensure_ascii=False,indent=2),encoding='utf-8')
     files=[{'path':p.relative_to(payload).as_posix(),'sha256':digest(p),'bytes':p.stat().st_size} for p in sorted(payload.rglob('*')) if p.is_file()]
-    manifest={'product':'WordLens','version':'0.7.0','build_id':args.build_id,'files':files}
+    manifest={'product':'WordLens','version':'0.7.1','build_id':args.build_id,'files':files}
     (payload/'payload.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2),encoding='utf-8')
-    exe=output/'WordCatch-0.7.0-Setup.exe'
+    exe=output/'WordCatch-0.7.1-Setup.exe'
     run([compiler,'/NOCONFIG','/INPUTCHARSET','UTF8','/V3',f'/DPAYLOAD={payload}',f'/DOUTPUT={exe}',ROOT/'installer/WordLens.nsi'])
     (output/'SHA256SUMS.txt').write_text(f'{digest(exe)}  {exe.name}\n',encoding='utf-8')
-    report={'version':'0.7.0','build_id':args.build_id,'installer':str(exe.relative_to(ROOT)).replace('\\','/'),'sha256':digest(exe),'bytes':exe.stat().st_size,'payload_files':len(files),'payload_bytes':sum(p['bytes'] for p in files),'signed':False,'installed_on_host':False}
+    report={'version':'0.7.1','build_id':args.build_id,'installer':str(exe.relative_to(ROOT)).replace('\\','/'),'sha256':digest(exe),'bytes':exe.stat().st_size,'payload_files':len(files),'payload_bytes':sum(p['bytes'] for p in files),'signed':False,'installed_on_host':False}
     (output/'build.json').write_text(json.dumps(report,indent=2),encoding='utf-8')
+    # Verify the retained installer before retiring only this build's duplicate
+    # frozen worker. The payload and diagnostic worker-build tree remain intact.
+    run([sys.executable, ROOT/'tools/verify_installer.py', args.build_id, '--seven-zip', seven])
     print(json.dumps(report))
 
 

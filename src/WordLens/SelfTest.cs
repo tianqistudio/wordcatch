@@ -60,12 +60,42 @@ public static class SelfTest
                 finally { if(!fixture.HasExited) fixture.Kill(); await fixture.WaitForExitAsync(); }
             }
             // Synthetic test content only: capture the application's own test surface.
-            sample = new Window { Title="WordLens synthetic test",Width=820,Height=300,Left=100,Top=100,Background=Brushes.White,Topmost=true,
-                Content=new TextBlock { Text="Hello world",FontSize=36,Foreground=Brushes.Black,Margin=new Thickness(40,60,0,0),FontFamily=new FontFamily("Segoe UI") } };
+            sample = new Window { Title="WordLens synthetic test",WindowStyle=WindowStyle.None,ResizeMode=ResizeMode.NoResize,
+                WindowState=WindowState.Maximized,Background=Brushes.White,Topmost=true,
+                Content=new TextBlock { Text="Hello world",FontSize=36,Foreground=Brushes.Black,
+                    HorizontalAlignment=HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Center,FontFamily=new FontFamily("Segoe UI") } };
             sample.Show(); sample.Activate();
             await Task.Delay(400);
             var point = ((TextBlock)sample.Content).PointToScreen(new Point(36,24));
-            var capture = ScreenCapture.AroundPoint(new Native.Point((int)point.X,(int)point.Y));
+            // Never capture adjacent desktop content: the complete sampling box
+            // must be inside this foreground synthetic window before CopyFromScreen.
+            var fixtureTopLeft=sample.PointToScreen(new Point(0,0));
+            var fixtureBottomRight=sample.PointToScreen(new Point(sample.ActualWidth,sample.ActualHeight));
+            var fixtureMonitor=Native.MonitorFromPoint(new Native.Point((int)point.X,(int)point.Y),2);
+            var fixtureInfo=new Native.MonitorInfo { Size=System.Runtime.InteropServices.Marshal.SizeOf<Native.MonitorInfo>() };
+            if(!Native.GetMonitorInfo(fixtureMonitor,ref fixtureInfo)) throw new Exception("Synthetic monitor unavailable");
+            Native.GetDpiForMonitor(fixtureMonitor,0,out uint fixtureDpi,out _);
+            double fixtureScale=fixtureDpi==0?1:fixtureDpi/96.0;
+            int sampleWidth=Math.Min(Math.Min((int)(720*fixtureScale),fixtureInfo.Monitor.Right-fixtureInfo.Monitor.Left),2400);
+            int sampleHeight=Math.Min(Math.Min((int)(180*fixtureScale),fixtureInfo.Monitor.Bottom-fixtureInfo.Monitor.Top),1600);
+            int sampleLeft=Math.Clamp((int)point.X-sampleWidth/2,fixtureInfo.Monitor.Left,fixtureInfo.Monitor.Right-sampleWidth);
+            int sampleTop=Math.Clamp((int)point.Y-sampleHeight/2,fixtureInfo.Monitor.Top,fixtureInfo.Monitor.Bottom-sampleHeight);
+            if(sampleLeft<fixtureTopLeft.X||sampleTop<fixtureTopLeft.Y||sampleLeft+sampleWidth>fixtureBottomRight.X||sampleTop+sampleHeight>fixtureBottomRight.Y)
+                throw new Exception($"Capture refused: sample={fixtureTopLeft}-{fixtureBottomRight}, box={sampleLeft},{sampleTop},{sampleWidth},{sampleHeight}, foreground={Native.GetForegroundWindow()==new System.Windows.Interop.WindowInteropHelper(sample).Handle}");
+            checks["capture_confined_to_fixture"]=true;
+            // Ask only our own HWND to render. This does not read the desktop,
+            // even if another application owns foreground focus during the test.
+            using var fixtureBitmap=new System.Drawing.Bitmap((int)(fixtureBottomRight.X-fixtureTopLeft.X),(int)(fixtureBottomRight.Y-fixtureTopLeft.Y));
+            using(var graphics=System.Drawing.Graphics.FromImage(fixtureBitmap))
+            {
+                var dc=graphics.GetHdc();
+                try { if(!PrintWindow(new System.Windows.Interop.WindowInteropHelper(sample).Handle,dc,2))throw new Exception("Synthetic window capture failed"); }
+                finally { graphics.ReleaseHdc(dc); }
+            }
+            using var fixtureCrop=fixtureBitmap.Clone(new System.Drawing.Rectangle(sampleLeft-(int)fixtureTopLeft.X,sampleTop-(int)fixtureTopLeft.Y,sampleWidth,sampleHeight),System.Drawing.Imaging.PixelFormat.Format24bppRgb);
+            using var fixtureStream=new MemoryStream();fixtureCrop.Save(fixtureStream,System.Drawing.Imaging.ImageFormat.Png);
+            var capture = new Capture(Convert.ToBase64String(fixtureStream.ToArray()),(int)point.X-sampleLeft,(int)point.Y-sampleTop,sampleLeft,sampleTop,new Native.Point((int)point.X,(int)point.Y));
+            checks["capture_method"]="PrintWindow own synthetic HWND only; desktop not read";
             await worker.StartAsync();
             var reply = await worker.RequestAsync(new {action="ocr",image=capture.Image,x=capture.X,y=capture.Y});
             checks["capture_text"] = reply.GetProperty("text").GetString() ?? "";
@@ -160,8 +190,11 @@ public static class SelfTest
             await card.CaptureAsync(capture);
             checks["highlight_does_not_activate"] = beforeHighlight == Native.GetForegroundWindow();
             checks["ocr_origin_retained"] = card.Primary.Origin.Text == "屏幕识别";
-            var blankPoint = ((TextBlock)sample.Content).PointToScreen(new Point(500,140));
-            var blank = ScreenCapture.AroundPoint(new Native.Point((int)blankPoint.X,(int)blankPoint.Y));
+            // The upper-left area of the same synthetic HWND is blank. Reuse
+            // its captured pixels so an overlay or another app cannot enter QA.
+            using var blankBitmap=fixtureBitmap.Clone(new System.Drawing.Rectangle(0,0,sampleWidth,sampleHeight),System.Drawing.Imaging.PixelFormat.Format24bppRgb);
+            using var blankStream=new MemoryStream();blankBitmap.Save(blankStream,System.Drawing.Imaging.ImageFormat.Png);
+            var blank = new Capture(Convert.ToBase64String(blankStream.ToArray()),sampleWidth/2,sampleHeight/2,(int)fixtureTopLeft.X,(int)fixtureTopLeft.Y,new Native.Point((int)fixtureTopLeft.X+sampleWidth/2,(int)fixtureTopLeft.Y+sampleHeight/2));
             card.Dismiss();
             await card.CaptureAsync(blank);
             checks["empty_ocr_actionable"] = card.Primary.Word.Text == "" && card.Primary.State.Text.Contains("移到文字上");
@@ -222,7 +255,7 @@ public static class SelfTest
             Render(main,Path.Combine(output,"main-window.png"));
             main.Width=main.MinWidth; main.Height=main.MinHeight; main.UpdateLayout();
             Render(main,Path.Combine(output,"main-minimum.png"));
-            checks["main_brand"] = main.Title == "单词捕手 · WordCatch";
+            checks["main_brand"] = main.Title == "单词捕手 WordCatch";
             checks["minimum_query_visible"] = main.Query.ActualWidth > 150 && main.LookupButton.ActualWidth > 30;
             var settings = new CloudSettingsWindow(disabled, null, new LocalLanguagePreference(Path.Combine(output, "ui-language"))) { Owner=main };
             settings.Show(); await Task.Delay(100); Render(settings,Path.Combine(output,"cloud-settings.png"));
@@ -248,7 +281,7 @@ public static class SelfTest
                 Render(main,Path.Combine(output,"main-english-"+cycle+".png"));
                 Render(settings,Path.Combine(output,"settings-english-"+cycle+".png"));
                 settings.LanguageChoice.SelectedIndex = 0;
-                checks["language_chinese_restored_" + cycle] = main.Title == "单词捕手 · WordCatch"
+                checks["language_chinese_restored_" + cycle] = main.Title == "单词捕手 WordCatch"
                     && main.Status.Text == "已分别处理 3 项；未收录的组合词拆分解释。";
             }
             languagePreference.Save(UiLanguage.SimplifiedChinese);
@@ -266,6 +299,7 @@ public static class SelfTest
             card?.Dismiss(); sample?.Close(); Application.Current.Shutdown(1);
         }
     }
+    [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern bool PrintWindow(IntPtr window,IntPtr dc,uint flags);
     private sealed class FixtureTranslator : HttpMessageHandler
     {
         public readonly TaskCompletionSource<bool> Started = new(TaskCreationOptions.RunContinuationsAsynchronously);

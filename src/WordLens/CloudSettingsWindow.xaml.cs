@@ -5,6 +5,11 @@ using System.Windows;
 namespace WordLens;
 public partial class CloudSettingsWindow : Window
 {
+    private void OpenCreator_Click(object sender, RoutedEventArgs e)
+    {
+        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("https://tianqistudio.com/home") { UseShellExecute = true }); }
+        catch (System.ComponentModel.Win32Exception) { MessageBox.Show("无法打开浏览器。请访问 https://tianqistudio.com/home"); }
+    }
     private readonly TranslationService service;
     private readonly LocalLanguagePreference languagePreference;
     private readonly UpdateService updates;
@@ -16,7 +21,7 @@ public partial class CloudSettingsWindow : Window
         this.languagePreference = languagePreference; this.service = service; this.updates=updates??new(); InitializeComponent(); Localization.Attach(this); Loaded += (_, _) => Localization.Attach(this);
         LanguageChoice.SelectedIndex = (int)Localization.CurrentLanguage;
         InstalledVersion.Text="当前版本 "+UpdateService.CurrentVersionText;
-        AboutVersion.Text="单词捕手 · WordCatch "+UpdateService.CurrentVersionText;
+        AboutVersion.Text="单词捕手 WordCatch "+UpdateService.CurrentVersionText;
         try { StartAtLogin.IsChecked = startup.Enabled; }
         catch (Exception ex) { StartAtLogin.IsEnabled = false; StartupHint.Text = "无法读取启动设置：" + ex.Message; }
         AutoUpdate.IsChecked=this.updates.Settings.Options.AutoCheck;

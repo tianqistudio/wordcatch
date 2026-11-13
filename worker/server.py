@@ -64,7 +64,7 @@ def main():
                 emit({'id': request['id'], 'text': text, 'entry': lookup(text) if text else None})
                 continue
             words = []
-            for row in (result.word_results or []):
+            for row in ((result.word_results or []) if result.txts else []):
                 for text, score, box in row:
                     if box is not None:
                         words.append({'text': text, 'score': float(score), 'box': np.asarray(box).tolist()})
