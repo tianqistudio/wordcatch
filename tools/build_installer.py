@@ -69,7 +69,7 @@ def main():
     for name in ('ecdict.sqlite3','source.json','models.json','LICENSE'):
         shutil.copy2(ROOT/'data'/name,payload/'data'/name)
     shutil.copy2(ROOT/'installer/Maintenance.ps1',payload/'Maintenance.ps1')
-    shutil.copy2(ROOT/'docs/installed-guide.md',payload/'浣跨敤璇存槑.md')
+    shutil.copy2(ROOT/'docs/installed-guide.md',payload/'使用说明.md')
     shutil.copy2(ROOT/'README.en.md',payload/'README.en.md')
     shutil.copy2(ROOT/'README.md',payload/'README.md')
     shutil.copy2(ROOT/'docs/third-party.md',payload/'THIRD-PARTY-NOTICES.md')
