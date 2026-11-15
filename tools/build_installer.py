@@ -1,5 +1,7 @@
 """Build a self-contained local installer; never execute the installer."""
 import argparse
+import contextlib
+import ctypes
 import hashlib
 import importlib.metadata
 import json
@@ -22,9 +24,27 @@ def run(args):
     subprocess.run([str(x) for x in args],cwd=ROOT,check=True)
 
 
+@contextlib.contextmanager
+def nsis_path_alias(directory):
+    """Keep NSIS input paths short without copying or moving the payload."""
+    if os.name != 'nt':
+        yield directory
+        return
+    occupied = ctypes.windll.kernel32.GetLogicalDrives()
+    drive = next((chr(letter) + ':' for letter in range(ord('Z'), ord('M') - 1, -1)
+                  if not occupied & (1 << (letter - ord('A')))), None)
+    if drive is None:
+        raise RuntimeError('No unused drive letter is available for NSIS staging')
+    subprocess.run(['subst', drive, str(directory)], check=True, capture_output=True)
+    try:
+        yield Path(drive + '/')
+    finally:
+        subprocess.run(['subst', drive, '/D'], check=True, capture_output=True)
+
+
 def main():
     parser=argparse.ArgumentParser()
-    parser.add_argument('--build-id',default='0.7.1-001')
+    parser.add_argument('--build-id',default='0.7.2-001')
     parser.add_argument('--seven-zip')
     args=parser.parse_args()
     seven,_=resolve_seven_zip(args.seven_zip)
@@ -49,7 +69,7 @@ def main():
     for name in ('ecdict.sqlite3','source.json','models.json','LICENSE'):
         shutil.copy2(ROOT/'data'/name,payload/'data'/name)
     shutil.copy2(ROOT/'installer/Maintenance.ps1',payload/'Maintenance.ps1')
-    shutil.copy2(ROOT/'docs/installed-guide.md',payload/'使用说明.md')
+    shutil.copy2(ROOT/'docs/installed-guide.md',payload/'浣跨敤璇存槑.md')
     shutil.copy2(ROOT/'README.en.md',payload/'README.en.md')
     shutil.copy2(ROOT/'README.md',payload/'README.md')
     shutil.copy2(ROOT/'docs/third-party.md',payload/'THIRD-PARTY-NOTICES.md')
@@ -73,13 +93,19 @@ def main():
                     target=licenses/name/(hashlib.sha256(str(entry).encode()).hexdigest()[:8]+'-'+entry.name)
                     target.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(original,target)
     (licenses/'python-dependencies.json').write_text(json.dumps(metadata,ensure_ascii=False,indent=2),encoding='utf-8')
+    # Scan the complete payload before sealing it into the installer. The
+    # container verifier below binds every embedded file to these same bytes.
+    run([sys.executable, ROOT/'tools/verify_release_privacy.py', payload,
+         ROOT/'vendor/nuget', '--allow-codeview-fingerprint', 'fed8267010385db424a04f39dfb7dcf22c34a000dcfde21d05e19f2c6fa17598', '--owned-prefix', 'WordLens', '--owned-prefix', 'TianqiStudio',
+         '--forbid-prefix', str(ROOT), '--report', output/'privacy-verification.json'])
     files=[{'path':p.relative_to(payload).as_posix(),'sha256':digest(p),'bytes':p.stat().st_size} for p in sorted(payload.rglob('*')) if p.is_file()]
-    manifest={'product':'WordLens','version':'0.7.1','build_id':args.build_id,'files':files}
+    manifest={'product':'WordLens','version':'0.7.2','build_id':args.build_id,'files':files}
     (payload/'payload.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2),encoding='utf-8')
-    exe=output/'WordCatch-0.7.1-Setup.exe'
-    run([compiler,'/NOCONFIG','/INPUTCHARSET','UTF8','/V3',f'/DPAYLOAD={payload}',f'/DOUTPUT={exe}',ROOT/'installer/WordLens.nsi'])
+    exe=output/'WordCatch-0.7.2-Setup.exe'
+    with nsis_path_alias(output) as alias:
+        run([compiler,'/NOCONFIG','/INPUTCHARSET','UTF8','/V3',f'/DPAYLOAD={alias/"payload"}',f'/DOUTPUT={alias/exe.name}',ROOT/'installer/WordLens.nsi'])
     (output/'SHA256SUMS.txt').write_text(f'{digest(exe)}  {exe.name}\n',encoding='utf-8')
-    report={'version':'0.7.1','build_id':args.build_id,'installer':str(exe.relative_to(ROOT)).replace('\\','/'),'sha256':digest(exe),'bytes':exe.stat().st_size,'payload_files':len(files),'payload_bytes':sum(p['bytes'] for p in files),'signed':False,'installed_on_host':False}
+    report={'version':'0.7.2','build_id':args.build_id,'installer':str(exe.relative_to(ROOT)).replace('\\','/'),'sha256':digest(exe),'bytes':exe.stat().st_size,'payload_files':len(files),'payload_bytes':sum(p['bytes'] for p in files),'signed':False,'installed_on_host':False}
     (output/'build.json').write_text(json.dumps(report,indent=2),encoding='utf-8')
     # Verify the retained installer before retiring only this build's duplicate
     # frozen worker. The payload and diagnostic worker-build tree remain intact.

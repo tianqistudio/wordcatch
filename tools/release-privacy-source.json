@@ -1,0 +1,19 @@
+{
+  "canonical_repository": "https://github.com/tianqistudio/fanorder",
+  "directory": "tools",
+  "version": "1.0.0",
+  "files": [
+    {
+      "file": "verify_release_privacy.py",
+      "sha256": "86408091d192d92d44f978bd0f32242fe0788691a68e8f7c9ec2c9d2db4166a8"
+    },
+    {
+      "file": "dotnet_static_payloads.py",
+      "sha256": "1badb52205c13dac67c885b449d835da9605fb12bac995187cb1bb0ff468c2f7"
+    },
+    {
+      "file": "test_release_privacy.py",
+      "sha256": "8ed60a9f244e66e5c3b308d32187c1ae923c11e7bc10c96ce5b222ce9e232e8d"
+    }
+  ]
+}

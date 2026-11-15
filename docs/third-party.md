@@ -2,8 +2,8 @@
 
 ## 快捷键
 
-源项目：`../DEV_FanOrder/artifacts/components/desktop-shortcuts-0.1.0/`。
-本项目复制两个 0.1.0 NuGet 包到 `vendor/nuget/`，不依赖原项目的运行目录、配置或设备业务。SHA-256 见 `vendor/nuget/SHA256SUMS.txt`。
+源项目：[FanOrder 快捷键组件源码](https://github.com/tianqistudio/fanorder/tree/main/src)。
+本项目复制两个 0.1.2 NuGet 包到 `vendor/nuget/`，不依赖原项目的运行目录、配置或设备业务。SHA-256 见 `vendor/nuget/SHA256SUMS.txt`。
 
 使用 `TianqiStudio.DesktopShortcuts` 与 WPF 适配层。宿主定义「屏幕取词」动作，并注入 WordLens 独立配置路径。未修改组件包。这是 tianqistudio 自有共享组件，本次随作者授权的源码与安装包发布。保留组件版权，不对其另行声明第三方开源许可证。
 
